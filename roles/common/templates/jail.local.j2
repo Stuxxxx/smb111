@@ -1,0 +1,10 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[DEFAULT]
+backend = systemd
+ignoreip = {{ fail2ban_ignoreip }}
+
+[sshd]
+enabled = true
+maxretry = {{ fail2ban_maxretry }}
+bantime = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
