@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fichiers chiffrés par ansible-vault et clés publiques"
+paths = [
+  '''group_vars/.*/vault\.yml''',
+  '''keys/.*\.pub''',
+]
