@@ -1,0 +1,9 @@
+---
+- name: Configuration commune à toutes les machines
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: Gestion des administrateurs
+  import_playbook: admins.yml

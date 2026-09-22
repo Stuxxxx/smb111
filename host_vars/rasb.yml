@@ -1,0 +1,4 @@
+---
+# Le réseau local est en liste blanche : évite de se bannir soi-même
+# pendant les tests d'administration.
+fail2ban_ignoreip: "127.0.0.1/8 ::1 192.168.1.0/24"
