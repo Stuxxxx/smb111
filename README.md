@@ -228,3 +228,4 @@ Prérequis : Ansible, les collections, un accès au Proxmox et le mot de passe d
 3. Toujours simuler (`--check --diff`) avant d'appliquer.
 4. Ne jamais pousser sur `main` : la protection est là pour éviter l'erreur, pas pour gêner.
 5. Un doute sur un secret ou un accès : demander avant d'agir.
+# test
