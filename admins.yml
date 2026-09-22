@@ -1,0 +1,37 @@
+- name: Gestion des administrateurs
+  hosts: all
+  become: true
+  tasks:
+    - name: Groupe admins
+      ansible.builtin.group:
+        name: admins
+        state: present
+
+    - name: Le groupe admins peut utiliser sudo sans mot de passe
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/admins
+        content: "%admins ALL=(ALL) NOPASSWD: ALL\n"
+        mode: "0440"
+        validate: visudo -cf %s
+
+    - name: Comptes des administrateurs
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        groups: admins
+        append: true
+        shell: /bin/bash
+        state: "{{ item.state | default('present') }}"
+        remove: "{{ item.state | default('present') == 'absent' }}"
+      loop: "{{ admins }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Clés SSH (seules celles du dépôt sont acceptées)
+      ansible.posix.authorized_key:
+        user: "{{ item.name }}"
+        key: "{{ lookup('file', playbook_dir ~ '/keys/' ~ item.name ~ '.pub') }}"
+        exclusive: true
+      when: item.state | default('present') == 'present'
+      loop: "{{ admins }}"
+      loop_control:
+        label: "{{ item.name }}"
