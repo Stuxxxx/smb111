@@ -59,7 +59,7 @@
       ansible.builtin.lineinfile:
         path: /var/log/maintenance.log
         line: >-
-          {{ ansible_date_time.iso8601 }} maintenance appliquée,
+          {{ ansible_facts['date_time']['iso8601'] }} maintenance appliquée,
           redémarrage {{ 'oui' if reboot_required.stat.exists else 'non' }}
         create: true
         owner: root
