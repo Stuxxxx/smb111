@@ -1,0 +1,88 @@
+---
+- name: Vérifier l'adressage
+  ansible.builtin.assert:
+    that:
+      - wg_address is defined
+      - adresses | length == adresses | unique | length
+    fail_msg: "wg_address manquant sur {{ inventory_hostname }}, ou adresse en double dans le tunnel"
+    quiet: true
+  vars:
+    adresses: >-
+      {{ groups[wg_groupe] | map('extract', hostvars, 'wg_address') | select('defined') | list
+         + wg_peers_externes | map(attribute='adresse') | list }}
+
+- name: Installer wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Dossier de configuration
+  ansible.builtin.file:
+    path: "{{ wg_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# La clé privée est générée sur l'hôte et n'en sort jamais :
+# elle n'apparaît ni dans les facts, ni dans les logs, ni dans wg0.conf.
+- name: Générer la clé privée (une seule fois)
+  ansible.builtin.shell: umask 077 && wg genkey > {{ wg_config_dir }}/{{ wg_interface }}.key
+  args:
+    creates: "{{ wg_config_dir }}/{{ wg_interface }}.key"
+
+- name: Dériver la clé publique
+  ansible.builtin.shell: wg pubkey < {{ wg_config_dir }}/{{ wg_interface }}.key
+  register: wg_pubkey
+  changed_when: false
+
+- name: Dossiers côté contrôleur
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ wg_cles_dir }}"
+    - "{{ wg_clients_dir }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+# Stockée sur le contrôleur pour que les pairs soient connus même avec --limit
+- name: Publier la clé publique sur le contrôleur
+  ansible.builtin.copy:
+    content: "{{ wg_pubkey.stdout }}\n"
+    dest: "{{ wg_cles_dir }}/{{ inventory_hostname }}.pub"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+
+- name: Configuration du tunnel
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "{{ wg_config_dir }}/{{ wg_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Recharger wireguard
+
+- name: Activer et démarrer le tunnel
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wg_interface }}"
+    enabled: true
+    state: started
+  tags: service
+
+- name: Configurations à importer sur les clients externes
+  ansible.builtin.template:
+    src: client.conf.j2
+    dest: "{{ wg_clients_dir }}/{{ item.nom }}.conf"
+    mode: "0600"
+  loop: "{{ wg_peers_externes }}"
+  loop_control:
+    label: "{{ item.nom }}"
+  delegate_to: localhost
+  become: false
+  run_once: true

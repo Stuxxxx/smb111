@@ -1,0 +1,29 @@
+# {{ ansible_managed }}
+# Address ou ListenPort modifiés : systemctl restart wg-quick@{{ wg_interface }}
+
+[Interface]
+Address = {{ wg_address }}/{{ wg_reseau.split('/')[1] }}
+ListenPort = {{ wg_port }}
+# Clé privée chargée depuis le fichier, jamais écrite ici
+PostUp = wg set %i private-key {{ wg_config_dir }}/%i.key
+{% for h in groups[wg_groupe] | difference([inventory_hostname]) %}
+{% set cle = lookup('ansible.builtin.file', wg_cles_dir ~ '/' ~ h ~ '.pub', errors='ignore') %}
+{% if cle %}
+
+[Peer]
+# {{ h }}
+PublicKey = {{ cle }}
+AllowedIPs = {{ hostvars[h].wg_address }}/32
+{% if hostvars[h].wg_endpoint is defined %}
+Endpoint = {{ hostvars[h].wg_endpoint }}:{{ hostvars[h].wg_port | default(wg_port) }}
+PersistentKeepalive = {{ wg_keepalive }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for p in wg_peers_externes %}
+
+[Peer]
+# {{ p.nom }} (externe)
+PublicKey = {{ p.cle_publique }}
+AllowedIPs = {{ p.adresse }}/32
+{% endfor %}

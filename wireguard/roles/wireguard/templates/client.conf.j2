@@ -1,0 +1,19 @@
+# Tunnel WireGuard pour {{ item.nom }}, généré par Ansible.
+# Dans l'app WireGuard : "Ajouter un tunnel vide", garder la ligne PrivateKey
+# qu'elle a générée, et coller le reste en dessous.
+# (clé publique attendue pour ce client : {{ item.cle_publique }})
+
+[Interface]
+Address = {{ item.adresse }}/32
+{% for h in groups[wg_groupe] if hostvars[h].wg_endpoint is defined %}
+{% set cle = lookup('ansible.builtin.file', wg_cles_dir ~ '/' ~ h ~ '.pub', errors='ignore') %}
+{% if cle %}
+
+[Peer]
+# {{ h }}
+PublicKey = {{ cle }}
+AllowedIPs = {{ hostvars[h].wg_address }}/32
+Endpoint = {{ hostvars[h].wg_endpoint }}:{{ hostvars[h].wg_port | default(wg_port) }}
+PersistentKeepalive = {{ wg_keepalive }}
+{% endif %}
+{% endfor %}
