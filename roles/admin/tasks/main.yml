@@ -21,3 +21,20 @@
     state: "{{ 'started' if admin_pull_enabled else 'stopped' }}"
     enabled: "{{ admin_pull_enabled }}"
     daemon_reload: true
+
+- name: Répertoire /etc/ansible
+  ansible.builtin.file:
+    path: /etc/ansible
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Mot de passe du vault, lisible par le groupe admins
+  ansible.builtin.copy:
+    content: "{{ vault_password }}\n"
+    dest: /etc/ansible/vault_pass
+    owner: root
+    group: admins
+    mode: "0640"
+  no_log: true
