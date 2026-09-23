@@ -1,0 +1,6 @@
+---
+admin_repo_url: "https://github.com/Stuxxxx/smb111.git"
+admin_repo_branch: main
+admin_pull_playbook: site.yml
+admin_pull_interval: "10min"
+admin_pull_user: sacha

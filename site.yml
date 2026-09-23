@@ -5,5 +5,11 @@
   roles:
     - common
 
+- name: Machine d'administration
+  hosts: admin
+  become: true
+  roles:
+    - admin
+
 - name: Gestion des administrateurs
   import_playbook: admins.yml
