@@ -8,3 +8,7 @@ admin_pull_user: sacha
 # Convergence automatique désactivée par défaut : elle est activée
 # machine par machine, dans host_vars/.
 admin_pull_enabled: false
+
+# Maintenance planifiée
+admin_maintenance_enabled: false
+admin_maintenance_schedule: "Sun *-*-* 03:00:00"
