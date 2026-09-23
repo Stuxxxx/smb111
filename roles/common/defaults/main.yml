@@ -5,6 +5,7 @@ common_packages:
   - tmux
   - jq
   - git
+  - dnsutils
 
 fail2ban_maxretry: 3
 fail2ban_bantime: 1h
