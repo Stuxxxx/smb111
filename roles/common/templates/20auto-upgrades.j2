@@ -1,0 +1,4 @@
+// Géré par Ansible
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "{{ 1 if unattended_enabled else 0 }}";
+APT::Periodic::AutocleanInterval "{{ unattended_autoclean_days }}";
