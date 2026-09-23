@@ -4,3 +4,7 @@ admin_repo_branch: main
 admin_pull_playbook: site.yml
 admin_pull_interval: "10min"
 admin_pull_user: sacha
+
+# Convergence automatique désactivée par défaut : elle est activée
+# machine par machine, dans host_vars/.
+admin_pull_enabled: false
