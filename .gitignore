@@ -1,3 +1,4 @@
 *.retry
 .vault_pass
 kubeconfig*
+vault_bootstrap.yml
