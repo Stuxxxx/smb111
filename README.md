@@ -226,29 +226,3 @@ en `skipping`) est dans `docs/guide-travail.md`, section 3.
 
 Si un secret a été poussé par erreur : préviens immédiatement, **révoque-le** (il est
 compromis, même après suppression), puis nettoie l'historique.
-
----
-
-## 5. Structure du dépôt
-
-```
-smb111/
-├── ansible.cfg                 # configuration Ansible (inventaire, vault, clé SSH)
-├── inventory.ini               # machines de production
-├── inventory-lab.ini           # machines du laboratoire
-├── requirements.yml            # collections Ansible requises
-├── site.yml                    # playbook principal : appelle les rôles
-├── admins.yml                  # playbook de gestion des accès
-├── group_vars/all/
-│   ├── admins.yml              # liste des administrateurs
-│   └── vault.yml               # secrets chiffrés
-├── host_vars/                  # variables propres à une machine
-├── keys/                       # clés publiques des administrateurs
-├── roles/
-│   ├── common/                 # paquets, durcissement SSH, fail2ban
-│   └── admin/                  # machine d'administration, timers systemd
-├── playbooks/                  # maintenance, sauvegarde, vérifications
-├── k8s/                        # manifests Kubernetes
-├── app/                        # code source et Dockerfile de l'application
-└── docs/                       # documentation technique
-```
