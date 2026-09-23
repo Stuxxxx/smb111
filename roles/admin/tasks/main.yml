@@ -15,9 +15,9 @@
     group: root
     mode: "0644"
 
-- name: Activer le timer
+- name: Activer ou désactiver le timer selon admin_pull_enabled
   ansible.builtin.systemd_service:
     name: ansible-pull.timer
-    state: started
-    enabled: true
+    state: "{{ 'started' if admin_pull_enabled else 'stopped' }}"
+    enabled: "{{ admin_pull_enabled }}"
     daemon_reload: true
