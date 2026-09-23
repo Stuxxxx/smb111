@@ -38,3 +38,4 @@
     group: admins
     mode: "0640"
   no_log: true
+  when: vault_password is defined
