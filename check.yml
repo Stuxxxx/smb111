@@ -1,0 +1,293 @@
+---
+# Contrôle de conformité du parc (FCT 05), pendant de maintenance.yml.
+# Lecture seule sur les machines : seul le cache apt est rafraîchi.
+# Le rapport Markdown est écrit sur le nœud de contrôle, dans rapports/.
+#
+#   ansible-playbook playbooks/check.yml
+#   ansible-playbook playbooks/check.yml --limit rasb
+#   ansible-playbook playbooks/check.yml -e check_echec_si_non_conforme=true
+#   ansible-playbook playbooks/check.yml --tags install_timer -K    # programme le timer
+#
+# Variables surchargeables (group_vars, host_vars ou -e) :
+#   check_comptes_autorises      comptes à shell interactif attendus  (défaut : [root])
+#   check_rapports_dir           dossier des rapports                  (défaut : <projet>/rapports)
+#   check_retention_jours        conservation des rapports, en jours   (défaut : 30)
+#   check_calendrier             OnCalendar du timer systemd           (défaut : *-*-* 06:00)
+#   check_echec_si_non_conforme  code retour ≠ 0 si un hôte est KO     (défaut : false)
+
+# ---------------------------------------------------------------------------
+# 0. Programmation : ne s'exécute qu'avec --tags install_timer
+# ---------------------------------------------------------------------------
+- name: Programmer le contrôle (timer systemd)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  tags: [never, install_timer]
+
+  vars:
+    projet_dir: "{{ playbook_dir | dirname }}"
+    utilisateur: "{{ lookup('ansible.builtin.env', 'USER') }}"
+    ansible_playbook_bin: "{{ lookup('ansible.builtin.pipe', 'command -v ansible-playbook') }}"
+
+  tasks:
+    - name: Unité de service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ansible-check.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Contrôle de conformité du parc (check.yml)
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          User={{ utilisateur }}
+          WorkingDirectory={{ projet_dir }}
+          ExecStart={{ ansible_playbook_bin }} playbooks/check.yml -e check_echec_si_non_conforme=true
+
+    - name: Timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ansible-check.timer
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Planification du contrôle de conformité
+
+          [Timer]
+          OnCalendar={{ check_calendrier | default('*-*-* 06:00') }}
+          RandomizedDelaySec=10min
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Activer le timer
+      ansible.builtin.systemd:
+        name: ansible-check.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+# ---------------------------------------------------------------------------
+# 1. Contrôles, en parallèle sur tout le parc
+# ---------------------------------------------------------------------------
+- name: Contrôles de conformité
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    comptes_autorises: "{{ check_comptes_autorises | default(['root']) }}"
+    shells_non_interactifs:
+      - /usr/sbin/nologin
+      - /sbin/nologin
+      - /bin/false
+      - /usr/bin/false
+      - /bin/sync
+      - /sbin/halt
+      - /sbin/shutdown
+
+  tasks:
+    # --- Redémarrage en attente ---------------------------------------------
+    - name: Redémarrage en attente ?
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Paquets qui réclament le redémarrage
+      ansible.builtin.slurp:
+        src: /var/run/reboot-required.pkgs
+      register: reboot_pkgs
+      when: reboot_required.stat.exists
+      failed_when: false
+
+    # --- Correctifs de sécurité non appliqués -------------------------------
+    - name: Rafraîchir le cache apt
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      changed_when: false
+      failed_when: false
+
+    - name: Paquets à mettre à jour
+      ansible.builtin.command: apt list --upgradable
+      register: apt_upgradable
+      changed_when: false
+
+    # --- SSH : authentification par clé uniquement --------------------------
+    - name: Configuration effective de sshd
+      ansible.builtin.command: sshd -T
+      register: sshd_config
+      changed_when: false
+      failed_when: false
+
+    # --- fail2ban -----------------------------------------------------------
+    - name: État des services
+      ansible.builtin.service_facts:
+
+    - name: Jail sshd de fail2ban
+      ansible.builtin.command: fail2ban-client status sshd
+      register: f2b_sshd
+      changed_when: false
+      failed_when: false
+
+    # --- Comptes ------------------------------------------------------------
+    - name: Lire la base des comptes
+      ansible.builtin.getent:
+        database: passwd
+
+    # --- Certificats : à venir ----------------------------------------------
+
+    # --- Synthèse -----------------------------------------------------------
+    - name: Synthèse des contrôles
+      ansible.builtin.set_fact:
+        check_resultats:
+          reboot:
+            ok: "{{ not reboot_required.stat.exists }}"
+            detail: "{{ pkgs_reboot | join(', ') or 'fichier reboot-required présent' }}"
+          securite:
+            ok: "{{ maj_secu | length == 0 }}"
+            detail: >-
+              {{ maj_secu | length }} correctif(s) : {{ maj_secu[:10] | join(', ') }}{{ ' …' if maj_secu | length > 10 else '' }}
+          ssh:
+            ok: "{{ ssh_password == 'no' and ssh_kbd == 'no' }}"
+            detail: >-
+              {{ ('sshd -T en échec : ' ~ (sshd_config.stderr | default('') or sshd_config.msg | default('?')))
+                 if sshd_config.rc | default(1) != 0
+                 else 'PasswordAuthentication ' ~ ssh_password ~ ', KbdInteractiveAuthentication ' ~ ssh_kbd }}
+          fail2ban:
+            ok: "{{ f2b.state == 'running' and f2b.status == 'enabled' and f2b_sshd.rc | default(1) == 0 }}"
+            detail: >-
+              service {{ f2b.state }} / {{ f2b.status }},
+              jail sshd {{ 'active' if f2b_sshd.rc | default(1) == 0 else 'absente' }}
+          comptes:
+            ok: "{{ comptes_hors_liste | length == 0 and uid0_hors_root | length == 0 }}"
+            detail: >-
+              hors liste : {{ comptes_hors_liste | join(', ') or 'aucun' }} ;
+              UID 0 hors root : {{ uid0_hors_root | join(', ') or 'aucun' }}
+      vars:
+        pkgs_reboot: >-
+          {{ (reboot_pkgs.content | default('') | b64decode).split() | unique | list }}
+        maj_secu: >-
+          {{ apt_upgradable.stdout_lines | select('search', '-security')
+             | map('regex_replace', '/.*$', '') | list }}
+        ssh_password: >-
+          {{ sshd_config.stdout | default('')
+             | regex_findall('^passwordauthentication (\S+)', multiline=True) | first | default('inconnu') }}
+        ssh_kbd: >-
+          {{ sshd_config.stdout | default('')
+             | regex_findall('^(?:kbdinteractive|challengeresponse)authentication (\S+)', multiline=True)
+             | first | default('inconnu') }}
+        f2b: >-
+          {{ ansible_facts.services['fail2ban.service']
+             | default({'state': 'absent', 'status': 'absent'}) }}
+        comptes_interactifs: >-
+          {{ ansible_facts.getent_passwd | dict2items
+             | rejectattr('value.5', 'in', shells_non_interactifs)
+             | map(attribute='key') | list }}
+        comptes_hors_liste: "{{ comptes_interactifs | difference(comptes_autorises) }}"
+        uid0_hors_root: >-
+          {{ ansible_facts.getent_passwd | dict2items
+             | selectattr('value.1', 'equalto', '0')
+             | map(attribute='key') | reject('equalto', 'root') | list }}
+
+    - name: Statut global de l'hôte
+      ansible.builtin.set_fact:
+        check_resume: "{{ statuts | map('ternary', 'OK', '**KO**') | list }}"
+        check_conforme: "{{ false not in statuts }}"
+      vars:
+        statuts: "{{ check_resultats.values() | map(attribute='ok') | map('bool') | list }}"
+
+    # --- Rapport, écrit une seule fois sur le nœud de contrôle -------------
+    # (dans ce play et non dans un play localhost, sinon --limit le filtrerait)
+    - name: Rapport de conformité
+      run_once: true
+      delegate_to: localhost
+      become: false
+      vars:
+        rapports_dir: "{{ check_rapports_dir | default(playbook_dir | dirname ~ '/rapports') }}"
+        cibles: "{{ query('ansible.builtin.inventory_hostnames', ansible_limit | default('all')) }}"
+        conformes: >-
+          {{ cibles | map('extract', hostvars)
+             | selectattr('check_conforme', 'defined') | selectattr('check_conforme')
+             | map(attribute='inventory_hostname') | list }}
+        non_conformes: "{{ cibles | difference(conformes) }}"
+      block:
+        - name: Horodatage
+          ansible.builtin.set_fact:
+            horodatage: "{{ now(fmt='%Y-%m-%d_%H%M') }}"
+
+        - name: Dossier des rapports
+          ansible.builtin.file:
+            path: "{{ rapports_dir }}"
+            state: directory
+            mode: "0755"
+
+        - name: Écrire le rapport
+          ansible.builtin.copy:
+            dest: "{{ rapports_dir }}/check_{{ horodatage }}.md"
+            mode: "0644"
+            content: |
+              # Contrôle de conformité du {{ horodatage }}
+
+              **{{ conformes | length }}/{{ cibles | length }}** hôtes conformes.
+
+              | Hôte | Reboot | Sécurité | SSH | fail2ban | Comptes |
+              |------|--------|----------|-----|----------|---------|
+              {% for h in cibles -%}
+              | {{ h }} | {{ hostvars[h].check_resume | default(['injoignable', '—', '—', '—', '—']) | join(' | ') }} |
+              {% endfor %}
+
+              {% for h in non_conformes -%}
+              ## {{ h }}
+
+              {% if hostvars[h].check_resultats is defined -%}
+              {% for nom, c in hostvars[h].check_resultats.items() if not c.ok | bool -%}
+              - **{{ nom }}** : {{ c.detail }}
+              {% endfor %}
+              {% else -%}
+              - Hôte non contrôlé (injoignable ou erreur d'exécution).
+              {% endif %}
+
+              {% endfor %}
+
+        - name: Pointer dernier.md vers ce rapport
+          ansible.builtin.file:
+            src: "check_{{ horodatage }}.md"
+            dest: "{{ rapports_dir }}/dernier.md"
+            state: link
+            force: true
+
+        - name: Repérer les rapports expirés
+          ansible.builtin.find:
+            paths: "{{ rapports_dir }}"
+            patterns: "check_*.md"
+            age: "{{ check_retention_jours | default(30) }}d"
+          register: rapports_expires
+
+        - name: Supprimer les rapports expirés
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ rapports_expires.files }}"
+          loop_control:
+            label: "{{ item.path | basename }}"
+
+        - name: Résumé
+          ansible.builtin.debug:
+            msg: >-
+              {{ conformes | length }}/{{ cibles | length }} hôtes conformes,
+              rapport : {{ rapports_dir }}/check_{{ horodatage }}.md
+
+        - name: Échec si un hôte n'est pas conforme (exploité par le timer)
+          ansible.builtin.fail:
+            msg: "Hôtes non conformes : {{ non_conformes | join(', ') }}"
+          when:
+            - check_echec_si_non_conforme | default(false) | bool
+            - non_conformes | length > 0
