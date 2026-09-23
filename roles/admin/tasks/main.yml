@@ -1,0 +1,23 @@
+---
+- name: Service ansible-pull
+  ansible.builtin.template:
+    src: ansible-pull.service.j2
+    dest: /etc/systemd/system/ansible-pull.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Timer ansible-pull
+  ansible.builtin.template:
+    src: ansible-pull.timer.j2
+    dest: /etc/systemd/system/ansible-pull.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Activer le timer
+  ansible.builtin.systemd_service:
+    name: ansible-pull.timer
+    state: started
+    enabled: true
+    daemon_reload: true
