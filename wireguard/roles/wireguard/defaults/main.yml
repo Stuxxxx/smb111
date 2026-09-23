@@ -1,0 +1,27 @@
+---
+# Groupe d'inventaire des hôtes qui portent le tunnel (maillage entre eux)
+wg_groupe: wireguard
+
+wg_interface: wg0
+wg_port: 51820
+wg_reseau: 10.66.0.0/24
+wg_keepalive: 25
+
+# Par hôte (host_vars ou inventaire) :
+#   wg_address: 10.66.0.1              obligatoire, unique dans wg_reseau
+#   wg_endpoint: monpi.duckdns.org     si l'hôte est joignable depuis Internet
+#                                      (IP publique ou DDNS + redirection UDP wg_port sur la box)
+
+wg_config_dir: /etc/wireguard
+
+# Côté contrôleur : clés publiques collectées (non secrètes, versionnables)
+# et configs à importer sur les clients externes
+wg_cles_dir: "{{ playbook_dir | dirname }}/wireguard/cles"
+wg_clients_dir: "{{ playbook_dir | dirname }}/wireguard/clients"
+
+# Pairs non gérés par Ansible (laptop Windows, téléphone…).
+# La clé privée est générée par l'app WireGuard du client et n'en sort jamais.
+wg_peers_externes: []
+#  - nom: laptop
+#    cle_publique: "base64…="
+#    adresse: 10.66.0.10

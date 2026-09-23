@@ -1,0 +1,9 @@
+---
+# reload = wg syncconf : ajoute/retire les pairs sans couper les sessions en cours
+# (y compris la connexion SSH d'Ansible si elle passe par le tunnel).
+# Un changement d'Address ou de ListenPort demande un restart manuel.
+- name: Recharger wireguard
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ wg_interface }}"
+    state: reloaded
+  tags: service
