@@ -5,5 +5,5 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1 192.168.1.0/24"
 
 # Convergence automatique limitée aux accès : une clé retirée du dépôt
 # disparaît seule, sans interférer avec le développement des autres rôles.
-admin_pull_enabled: true
+admin_pull_enabled: false 
 admin_pull_playbook: admins.yml
