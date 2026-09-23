@@ -9,6 +9,7 @@ manifests Kubernetes, documentation et schémas.
 - **Machine d'administration** : `rasb` (Raspberry Pi 5). C'est depuis elle que tout est déployé.
 - **Dépôt public** : aucun secret en clair. Les secrets sont chiffrés avec `ansible-vault`.
 - **Branche `main` protégée** : toute modification passe par une Pull Request relue.
+- **Convergence automatique** : les accès sont réappliqués toutes les 10 minutes depuis `main`.
 
 ---
 
@@ -21,7 +22,19 @@ le compte, installe la clé et accorde les droits `sudo` sur toutes les machines
 > Une fusion dans `main` revient à distribuer un accès `root` sur l'ensemble du SI.
 > C'est pour cette raison que chaque ajout est relu avant d'être appliqué.
 
-### Étape 1 — Générer une paire de clés SSH
+### Étape 1 — Être ajouté comme collaborateur
+
+Le responsable du projet ajoute le nouveau membre dans
+*Settings → Collaborators*, avec le rôle **Write**. Sans ce droit, impossible de pousser une
+branche sur le dépôt.
+
+Cette étape ne donne **aucun accès aux machines** : elle permet seulement de proposer des
+modifications.
+
+À défaut, il reste possible de contribuer par un **fork** du dépôt : la suite de la procédure
+est identique.
+
+### Étape 2 — Générer une paire de clés SSH
 
 Sur **ta** machine (ton poste de travail, jamais sur un serveur) :
 
@@ -41,7 +54,10 @@ eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
 ```
 
-### Étape 2 — Proposer ton accès
+Ajoute par ailleurs une clé dans **ton** compte GitHub (*Settings → SSH and GPG keys*) pour
+pouvoir pousser.
+
+### Étape 3 — Proposer son accès
 
 ```bash
 git clone git@github.com:Stuxxxx/smb111.git
@@ -60,7 +76,7 @@ admins:
 ```
 
 Le nom du fichier `keys/<nom>.pub` doit être **identique** au `name` déclaré : c'est ce qui
-permet au playbook de les associer.
+permet au playbook de les associer. Identifiants en **minuscules**, sans accent ni espace.
 
 ```bash
 git add keys/prenom.pub group_vars/all/admins.yml
@@ -68,18 +84,38 @@ git commit -m "access: ajout de prenom"
 git push -u origin access/prenom
 ```
 
-Ouvre ensuite la Pull Request sur GitHub.
+Ouvre ensuite la Pull Request sur GitHub. Ansible n'est pas nécessaire sur ton poste : tu ne
+modifies que des données, pas du code.
 
-### Étape 3 — Après la fusion
+### Étape 4 — Relecture et application
 
-Un administrateur relit, fusionne, puis applique le playbook. Tu peux alors te connecter :
+Le responsable relit (la PR ne doit contenir que le fichier `.pub` et la ligne ajoutée),
+approuve, fusionne, puis applique depuis la machine d'administration.
+
+**Le déclencheur de l'accès est la fusion suivie de l'exécution du playbook**, jamais
+l'ouverture de la Pull Request. Une PR ouverte ne donne rien à personne.
+
+### Étape 5 — Première connexion
 
 ```bash
 ssh prenom@<adresse-de-la-machine>
+sudo -n true && echo "sudo OK"
 ```
 
 Ton compte n'a **pas** de mot de passe : la connexion se fait uniquement par clé, et `sudo`
 fonctionne sans mot de passe pour le groupe `admins`.
+
+### Ajouter une seconde machine
+
+Une clé **par machine** : ne recopie jamais une clé privée d'un poste à l'autre. Ajoute la
+nouvelle clé publique **à la suite** dans ton fichier existant, sans écraser l'ancienne :
+
+```bash
+cat ~/.ssh/id_ed25519.pub >> keys/prenom.pub
+cat keys/prenom.pub      # doit contenir DEUX lignes
+```
+
+Chaque ligne du fichier devient une clé autorisée.
 
 ### Départ d'un membre
 
@@ -90,14 +126,29 @@ On ne supprime pas la ligne : on la marque `absent`, pour garder la trace dans l
     state: absent
 ```
 
-Au passage suivant du playbook, le compte et son dossier personnel sont supprimés sur toutes
+Au passage suivant du playbook, le compte et son dossier personnel sont supprimés de toutes
 les machines.
 
 ---
 
 ## 2. Travailler proprement sur le dépôt
 
-### Prérequis sur la machine de travail
+### Où lancer les commandes
+
+| Action | Où |
+|---|---|
+| Éditer les fichiers | ton poste (VS Code + extension **Remote - SSH**) ou directement sur `rasb` |
+| Git (pull, branche, commit, push) | **sur `rasb`**, dans ton propre clone |
+| `ansible-playbook` | **sur `rasb`** |
+| Ouvrir et fusionner les PR | navigateur |
+
+Les commandes Ansible s'exécutent **toujours depuis la machine d'administration** : c'est elle
+qui détient l'inventaire, la clé `smb111` et le mot de passe du vault.
+
+Chaque membre travaille dans **son propre clone** (`/home/<prenom>/smb111`), jamais dans celui
+d'un autre : deux personnes sur le même dossier se marcheraient dessus.
+
+### Prérequis
 
 ```bash
 sudo apt install -y git pipx
@@ -106,9 +157,7 @@ pipx inject ansible kubernetes proxmoxer requests
 ansible-galaxy collection install -r requirements.yml
 ```
 
-La plupart des opérations se lancent **depuis `rasb`**, la machine d'administration, où tout
-est déjà installé. Pour éditer confortablement, utilise VS Code avec l'extension
-**Remote - SSH** : tu édites depuis ton poste, tout s'exécute sur `rasb`.
+Tout est déjà installé sur `rasb`.
 
 ### Le cycle de travail
 
@@ -119,11 +168,11 @@ git checkout main && git pull            # 1. partir de la dernière version
 git checkout -b feat/sujet-court         # 2. une branche par sujet
 
 # 3. modifier, puis TOUJOURS simuler avant d'appliquer
-ansible-playbook <playbook>.yml --check --diff
+ansible-playbook site.yml --check --diff
 
 # 4. appliquer et vérifier l'idempotence (2e exécution : changed=0)
-ansible-playbook <playbook>.yml
-ansible-playbook <playbook>.yml
+ansible-playbook site.yml
+ansible-playbook site.yml
 
 git add -A
 git commit -m "feat: description courte à l'impératif"
@@ -137,6 +186,29 @@ git checkout main && git pull
 git branch -d feat/sujet-court
 ```
 
+### Pourquoi simuler d'abord
+
+`--check --diff` montre ce qu'Ansible **ferait**, sans rien modifier. C'est le moment de
+repérer une erreur de nom de fichier ou une clé sur le point d'être écrasée. Un exemple de
+lecture :
+
+```
+TASK [Clés SSH]
+ok:      [rasb] => (item=sacha)     <- inchangé, c'est normal
+changed: [rasb] => (item=prenom)    <- la clé serait installée
+```
+
+Un `changed` sur une clé **existante** est une anomalie : arrête-toi et vérifie.
+
+### Pourquoi vérifier l'idempotence
+
+La seconde exécution doit afficher `changed=0`. C'est la preuve que le code décrit un **état**
+et non des actions. Sans cela, chaque passage referait le travail et redémarrerait des
+services inutilement.
+
+Un `changed` persistant signale un bug, le plus souvent une tâche `command` ou `shell` sans
+condition, qui s'exécute quoi qu'il arrive.
+
 ### Nommage
 
 | Type | Branche | Commit |
@@ -147,6 +219,9 @@ git branch -d feat/sujet-court
 | Documentation | `docs/nom` | `docs: complète la matrice des flux` |
 
 Un commit = un changement cohérent. Message à l'impératif, en français, sans point final.
+
+Un changement d'accès fait l'objet d'une **PR séparée** : il doit rester lisible d'un coup
+d'œil, sans être noyé dans une modification de rôle.
 
 ### Avant d'ouvrir une Pull Request
 
@@ -164,7 +239,88 @@ fusion. Le résultat est visible dans l'onglet **Actions** et dans la Pull Reque
 
 ---
 
-## 3. Les secrets
+## 3. Convergence automatique (`ansible-pull`)
+
+### Principe
+
+Un **timer systemd** installé par le rôle `admin` lance `ansible-pull` toutes les
+**10 minutes** sur la machine d'administration. Celui-ci clone `main` et applique le playbook
+**en local**, sans SSH.
+
+Conséquence directe : une clé SSH ajoutée à la main sur une machine, ou un fichier modifié
+hors du dépôt, est **annulé au passage suivant**. Le dépôt est la seule source de vérité, en
+permanence — c'est ce qui donne sa valeur au dispositif côté sécurité.
+
+### Configuration actuelle
+
+Définie dans `roles/admin/defaults/main.yml`, surchargée par machine dans `host_vars/` :
+
+| Variable | Valeur sur `rasb` | Rôle |
+|---|---|---|
+| `admin_pull_enabled` | `true` | active ou désactive le timer |
+| `admin_pull_playbook` | `admins.yml` | ce qui est réappliqué automatiquement |
+| `admin_pull_interval` | `10min` | fréquence |
+| `admin_repo_branch` | `main` | branche appliquée |
+
+Le pull est volontairement limité à `admins.yml` : les **accès** convergent seuls, ce qui est
+l'essentiel en sécurité, tandis que le reste de la configuration reste sous contrôle manuel
+pendant la phase de développement. Passer à `site.yml` fera converger l'infrastructure
+complète.
+
+### Suivre et déclencher
+
+```bash
+systemctl list-timers ansible-pull.timer --no-pager   # prochaine exécution
+sudo systemctl start ansible-pull.service             # déclencher maintenant
+journalctl -u ansible-pull.service -n 30 --no-pager   # ce qu'a fait le dernier passage
+```
+
+Prends le réflexe de consulter le journal après une fusion : c'est là que tu verras ce qui a
+réellement été appliqué.
+
+### Suspendre le timer
+
+**Pour une séance de travail** (temporaire, non tracé) :
+
+```bash
+sudo systemctl stop ansible-pull.timer
+# ... développement et tests ...
+sudo systemctl start ansible-pull.timer
+```
+
+Cet arrêt est une modification manuelle : le prochain `ansible-playbook site.yml` rétablira
+l'état décrit par `admin_pull_enabled`.
+
+**Durablement** (par le code, donc tracé) — dans `host_vars/rasb.yml` :
+
+```yaml
+admin_pull_enabled: false
+```
+
+puis `ansible-playbook site.yml`. Les unités systemd restent installées, simplement inactives.
+
+### Le piège à connaître
+
+Tant qu'une branche n'est pas fusionnée, ce que tu appliques à la main et ce que le timer
+applique **divergent** : le timer clone `main`, où ton travail n'existe pas encore.
+
+Exemple : tu testes une nouvelle valeur depuis ta branche, elle est bien appliquée ; dix
+minutes plus tard le timer la remplace par celle de `main`, sans erreur ni message. Ce n'est
+pas un bug, c'est la convergence qui fait son travail.
+
+Trois façons de procéder, selon le contexte :
+
+1. **Cycle court** : tester, puis fusionner rapidement. Le décalage ne dure que quelques minutes.
+2. **Session longue** : suspendre le timer pendant le travail.
+3. **Cible séparée** (à venir) : développer contre les VM du laboratoire avec
+   `-i inventory-lab.ini`, et réserver `rasb` à l'application de `main`.
+
+Réflexe de diagnostic : si un fichier ne correspond plus à ce que tu attends, vérifie d'abord
+que ce que tu voulais est bien dans `main`.
+
+---
+
+## 4. Les secrets
 
 **Aucun secret ne doit apparaître en clair dans ce dépôt.** Tout passe par `ansible-vault`.
 
@@ -184,7 +340,7 @@ compromis, même après suppression), puis nettoie l'historique.
 
 ---
 
-## 4. Structure du dépôt
+## 5. Structure du dépôt
 
 ```
 smb111/
@@ -192,22 +348,35 @@ smb111/
 ├── inventory.ini               # machines de production
 ├── inventory-lab.ini           # machines du laboratoire
 ├── requirements.yml            # collections Ansible requises
+├── site.yml                    # playbook principal : appelle les rôles
 ├── admins.yml                  # playbook de gestion des accès
-├── site.yml                    # playbook principal : déploie tout
 ├── group_vars/all/
 │   ├── admins.yml              # liste des administrateurs
 │   └── vault.yml               # secrets chiffrés
+├── host_vars/                  # variables propres à une machine
 ├── keys/                       # clés publiques des administrateurs
-├── roles/                      # rôles Ansible
-├── playbooks/                  # playbooks spécifiques (maintenance, sauvegarde…)
+├── roles/
+│   ├── common/                 # paquets, durcissement SSH, fail2ban
+│   └── admin/                  # machine d'administration, timers systemd
+├── playbooks/                  # maintenance, sauvegarde, vérifications
 ├── k8s/                        # manifests Kubernetes
 ├── app/                        # code source et Dockerfile de l'application
 └── docs/                       # documentation technique
 ```
 
+### Où mettre une variable
+
+| Emplacement | Portée |
+|---|---|
+| `roles/<rôle>/defaults/main.yml` | valeur par défaut du rôle |
+| `group_vars/<groupe>.yml` | toutes les machines du groupe |
+| `host_vars/<machine>.yml` | cette machine seulement |
+
+Un rôle reste générique ; les exceptions vivent à côté.
+
 ---
 
-## 5. Reconstruire depuis zéro
+## 6. Reconstruire depuis zéro
 
 ```bash
 git clone git@github.com:Stuxxxx/smb111.git && cd smb111
@@ -218,14 +387,24 @@ ansible-playbook site.yml
 
 Prérequis : Ansible, les collections, un accès au Proxmox et le mot de passe du vault.
 
+Cibler une partie du parc :
+
+```bash
+ansible-playbook site.yml --limit web        # un groupe
+ansible-playbook site.yml --limit web1       # une machine
+```
+
 ---
 
-## 6. Règles de sécurité
+## 7. Règles de sécurité
 
 1. La clé privée ne quitte **jamais** la machine sur laquelle elle a été générée.
 2. Aucune modification manuelle sur les serveurs : tout passe par Ansible et le dépôt.
    Une clé ajoutée à la main est supprimée au passage suivant du playbook.
 3. Toujours simuler (`--check --diff`) avant d'appliquer.
 4. Ne jamais pousser sur `main` : la protection est là pour éviter l'erreur, pas pour gêner.
-5. Un doute sur un secret ou un accès : demander avant d'agir.
-# test
+5. Un changement d'accès fait l'objet d'une PR séparée, relue attentivement.
+6. Un doute sur un secret ou un accès : demander avant d'agir.
+
+Le détail du modèle de droits (rôles GitHub, ruleset, CODEOWNERS, procédures de révocation)
+figure dans `docs/gestion-des-droits.md`.
