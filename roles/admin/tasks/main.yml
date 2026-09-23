@@ -39,3 +39,26 @@
     mode: "0640"
   no_log: true
   when: vault_password is defined
+
+- name: Service de maintenance
+  ansible.builtin.template:
+    src: maintenance.service.j2
+    dest: /etc/systemd/system/maintenance.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Timer de maintenance
+  ansible.builtin.template:
+    src: maintenance.timer.j2
+    dest: /etc/systemd/system/maintenance.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Activer ou désactiver le timer de maintenance
+  ansible.builtin.systemd_service:
+    name: maintenance.timer
+    state: "{{ 'started' if admin_maintenance_enabled else 'stopped' }}"
+    enabled: "{{ admin_maintenance_enabled }}"
+    daemon_reload: true

@@ -1,0 +1,11 @@
+[Unit]
+Description=Maintenance hebdomadaire du parc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ admin_pull_user }}
+WorkingDirectory=/home/{{ admin_pull_user }}/smb111
+Environment=PATH=/home/{{ admin_pull_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/{{ admin_pull_user }}/.local/bin/ansible-playbook playbooks/maintenance.yml
