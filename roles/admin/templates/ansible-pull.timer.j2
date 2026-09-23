@@ -1,0 +1,11 @@
+[Unit]
+Description=Applique la configuration toutes les {{ admin_pull_interval }}
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ admin_pull_interval }}
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
