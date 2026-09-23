@@ -1,3 +1,4 @@
+---
 # Mise à jour complète du parc, une machine à la fois.
 # Les nœuds Kubernetes sont vidés avant et remis en service après.
 #
@@ -20,7 +21,7 @@
         cmd: >
           kubectl drain {{ inventory_hostname }}
           --ignore-daemonsets --delete-emptydir-data --timeout=300s
-      delegate_to: "{{ groups['control_plane'] | first }}"
+      delegate_to: "{{ groups['control_plane'] | default([inventory_hostname]) | first }}"
       when: inventory_hostname in groups.get('k3s', [])
       changed_when: true
 
@@ -50,7 +51,7 @@
     - name: Remettre le nœud en service (uncordon)
       ansible.builtin.command:
         cmd: kubectl uncordon {{ inventory_hostname }}
-      delegate_to: "{{ groups['control_plane'] | first }}"
+      delegate_to: "{{ groups['control_plane'] | default([inventory_hostname]) | first }}"
       when: inventory_hostname in groups.get('k3s', [])
       changed_when: true
 
