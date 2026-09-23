@@ -11,3 +11,7 @@ fail2ban_maxretry: 3
 fail2ban_bantime: 1h
 fail2ban_findtime: 10m
 fail2ban_ignoreip: "127.0.0.1/8 ::1"
+# Mises à jour de sécurité automatiques
+unattended_enabled: true
+unattended_mail: ""            # adresse de notification, vide = aucune
+unattended_autoclean_days: 7
