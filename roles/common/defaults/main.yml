@@ -15,3 +15,7 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1"
 unattended_enabled: true
 unattended_mail: ""            # adresse de notification, vide = aucune
 unattended_autoclean_days: 7
+# Locales à générer
+common_locales:
+  - en_US.UTF-8
+  - fr_FR.UTF-8

@@ -60,3 +60,13 @@
   loop:
     - apt-daily.timer
     - apt-daily-upgrade.timer
+- name: Paquet locales
+  ansible.builtin.apt:
+    name: locales
+    state: present
+
+- name: Générer les locales
+  community.general.locale_gen:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ common_locales }}"
