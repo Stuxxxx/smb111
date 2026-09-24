@@ -38,5 +38,10 @@
       {{ admin_ansible_bin }}/ansible-galaxy collection install
       -r {{ playbook_dir }}/requirements.yml
       -p {{ admin_collections_path }}
+      --force
+  environment:
+    ANSIBLE_COLLECTIONS_PATH: "{{ admin_collections_path }}"
   register: galaxy_install
   changed_when: "'Installing' in galaxy_install.stdout"
+  args:
+    creates: "{{ admin_collections_path }}/ansible_collections/kubernetes"
