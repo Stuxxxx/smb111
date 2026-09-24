@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=oneshot
 User={{ admin_pull_user }}
 Environment=PATH=/home/{{ admin_pull_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/{{ admin_pull_user }}/.local/bin/ansible-pull \
+ExecStart={{ admin_ansible_bin }}/ansible-pull \
   --url {{ admin_repo_url }} \
   --checkout {{ admin_repo_branch }} \
   --directory /home/{{ admin_pull_user }}/.ansible-pull \
