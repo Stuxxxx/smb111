@@ -1,7 +1,0 @@
----
-# Clients non gérés par Ansible. Clé publique : dans l'app WireGuard,
-# "Ajouter un tunnel vide" → copier la clé publique affichée.
-wg_peers_externes:
-  - nom: laptop
-    cle_publique: "A_REMPLACER="
-    adresse: 10.66.0.10
