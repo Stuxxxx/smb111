@@ -1,0 +1,80 @@
+---
+- name: Variables obligatoires renseignées
+  ansible.builtin.assert:
+    that:
+      - proxmox_api_host | length > 0
+      - opnsense_iso_sha256 | length == 64
+    fail_msg: >-
+      Renseigner proxmox_api_host et opnsense_iso_sha256
+      (host_vars/rasb.yml ou -e) avant de lancer ce playbook.
+    quiet: true
+
+- name: Dépendances Python de l'API Proxmox
+  ansible.builtin.apt:
+    name:
+      - python3-proxmoxer
+      - python3-requests
+      - python3-requests-toolbelt   # upload de fichiers > 256 Mo
+      - bzip2
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Répertoire de téléchargement
+  ansible.builtin.file:
+    path: "{{ opnsense_download_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Téléchargement de l'image OPNsense (vérifiée par SHA-256)
+  ansible.builtin.get_url:
+    url: "{{ opnsense_mirror }}/{{ opnsense_version }}/{{ _opnsense_image }}.bz2"
+    dest: "{{ opnsense_download_dir }}/{{ _opnsense_image }}.bz2"
+    checksum: "sha256:{{ opnsense_iso_sha256 }}"
+    mode: "0644"
+    timeout: 60
+
+- name: Décompression de l'image
+  ansible.builtin.command:
+    cmd: bzip2 -dkf {{ _opnsense_image }}.bz2
+    chdir: "{{ opnsense_download_dir }}"
+    creates: "{{ opnsense_download_dir }}/{{ _opnsense_image }}"
+
+- name: Envoi de l'ISO sur Proxmox
+  community.proxmox.proxmox_template:
+    node: "{{ proxmox_node }}"
+    storage: "{{ proxmox_iso_storage }}"
+    content_type: iso
+    src: "{{ opnsense_download_dir }}/{{ _opnsense_image }}"
+    timeout: 900
+    state: present
+
+- name: Création de la VM pare-feu
+  community.proxmox.proxmox_kvm:
+    node: "{{ proxmox_node }}"
+    vmid: "{{ fw_vm_id }}"
+    name: "{{ fw_vm_name }}"
+    ostype: other               # FreeBSD
+    cores: "{{ fw_vm_cores }}"
+    memory: "{{ fw_vm_memory }}"
+    scsihw: virtio-scsi-single
+    scsi:
+      scsi0: "{{ proxmox_disk_storage }}:{{ fw_vm_disk_size }},discard=on"
+    ide:
+      ide2: "{{ proxmox_iso_storage }}:iso/{{ _opnsense_image }},media=cdrom"
+    net:
+      net0: "virtio,bridge={{ fw_wan_bridge }}"   # vtnet0 -> WAN
+      net1: "virtio,bridge={{ fw_lan_bridge }}"   # vtnet1 -> LAN
+    # Disque vide au premier démarrage : la VM démarre sur l'installeur.
+    boot: "order=scsi0;ide2"
+    agent: "1"                  # plugin os-qemu-guest-agent côté OPNsense
+    onboot: true
+    state: present
+
+- name: Démarrage de la VM pare-feu
+  community.proxmox.proxmox_kvm:
+    node: "{{ proxmox_node }}"
+    vmid: "{{ fw_vm_id }}"
+    state: started

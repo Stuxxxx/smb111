@@ -1,0 +1,30 @@
+---
+# --- Accès à l'API Proxmox -------------------------------------------------
+# À renseigner quand le serveur sera disponible.
+proxmox_api_host: ""
+proxmox_api_user: "ansible@pve"
+proxmox_api_token_id: "smb111"
+# Secret du jeton : dans le vault (ansible-vault edit group_vars/all/vault.yml)
+proxmox_api_token_secret: "{{ vault_proxmox_token_secret }}"
+# Certificat auto-signé par défaut sur Proxmox ; à passer à true avec la PKI.
+proxmox_validate_certs: false
+proxmox_node: "pve"
+proxmox_iso_storage: "local"
+proxmox_disk_storage: "local-lvm"
+
+# --- VM pare-feu -----------------------------------------------------------
+fw_vm_id: 100
+fw_vm_name: "fw01"
+fw_vm_cores: 2
+fw_vm_memory: 4096          # Mo
+fw_vm_disk_size: 20         # Go
+fw_wan_bridge: "vmbr0"      # réseau de rasb (192.168.1.0/24)
+fw_lan_bridge: "vmbr1"      # réseau interne des serveurs, sans port physique
+
+# --- Image OPNsense --------------------------------------------------------
+opnsense_version: "26.7"
+opnsense_mirror: "https://pkg.opnsense.org/releases"
+# SHA-256 du fichier .iso.bz2, à recopier depuis le fichier officiel
+# OPNsense-<version>-checksums-amd64.sha256 publié à côté de l'image.
+opnsense_iso_sha256: ""
+opnsense_download_dir: "/var/cache/smb111"

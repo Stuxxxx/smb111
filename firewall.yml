@@ -1,0 +1,24 @@
+---
+# Création de la VM pare-feu OPNsense sur Proxmox, pilotée depuis rasb
+# par l'API (aucun accès SSH au serveur Proxmox n'est nécessaire).
+#
+#   ansible-galaxy collection install -r requirements.yml
+#   ansible-playbook firewall.yml
+#
+# Volontairement absent de site.yml tant que le serveur Proxmox
+# n'est pas disponible : ansible-pull échouerait à chaque passage.
+
+- name: VM pare-feu OPNsense
+  hosts: admin
+  become: true
+  vars:
+    _opnsense_image: "OPNsense-{{ opnsense_version }}-dvd-amd64.iso"
+  module_defaults:
+    group/community.proxmox.proxmox:
+      api_host: "{{ proxmox_api_host }}"
+      api_user: "{{ proxmox_api_user }}"
+      api_token_id: "{{ proxmox_api_token_id }}"
+      api_token_secret: "{{ proxmox_api_token_secret }}"
+      validate_certs: "{{ proxmox_validate_certs }}"
+  roles:
+    - proxmox_firewall

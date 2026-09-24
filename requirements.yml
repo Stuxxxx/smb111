@@ -1,5 +1,6 @@
 collections:
   - name: ansible.posix
   - name: community.general
+  - name: community.proxmox
   - name: community.crypto
   - name: kubernetes.core
