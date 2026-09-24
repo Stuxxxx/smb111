@@ -9,3 +9,9 @@ admin_pull_enabled: false
 admin_pull_playbook: admins.yml
 # Activer la maintenance (redémarrage les dimanches)
 admin_maintenance_enabled: true
+admin_check_enabled: true
+check_timers_attendus: >-
+  {{ (['ansible-pull.timer'] if admin_pull_enabled | default(false) else [])
+     + (['maintenance.timer'] if admin_maintenance_enabled | default(false) else [])
+     + (['check.timer'] if admin_check_enabled | default(false) else [])
+     + ['apt-daily.timer', 'apt-daily-upgrade.timer'] }}

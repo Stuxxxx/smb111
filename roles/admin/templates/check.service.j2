@@ -1,0 +1,11 @@
+[Unit]
+Description=Contrôle de conformité du parc
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ admin_pull_user }}
+WorkingDirectory=/home/{{ admin_pull_user }}/smb111
+Environment=PATH={{ admin_ansible_bin }}:/usr/local/bin:/usr/bin:/bin
+ExecStart={{ admin_ansible_bin }}/ansible-playbook playbooks/check.yml -e check_echec_si_non_conforme=true
