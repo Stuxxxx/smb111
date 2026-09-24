@@ -8,4 +8,4 @@ Type=oneshot
 User={{ admin_pull_user }}
 WorkingDirectory=/home/{{ admin_pull_user }}/smb111
 Environment=PATH=/home/{{ admin_pull_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/home/{{ admin_pull_user }}/.local/bin/ansible-playbook playbooks/maintenance.yml
+ExecStart={{ admin_ansible_bin }}/ansible-playbook playbooks/maintenance.yml

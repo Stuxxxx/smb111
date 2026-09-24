@@ -12,3 +12,7 @@ admin_pull_enabled: false
 # Maintenance planifiée
 admin_maintenance_enabled: false
 admin_maintenance_schedule: "Sun *-*-* 03:00:00"
+# Installation partagée d'Ansible
+admin_ansible_bin: /usr/local/bin
+admin_pipx_home: /opt/pipx
+admin_collections_path: /usr/share/ansible/collections

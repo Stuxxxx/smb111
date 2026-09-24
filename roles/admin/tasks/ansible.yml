@@ -1,0 +1,42 @@
+---
+- name: Paquets nécessaires à pipx
+  ansible.builtin.apt:
+    name:
+      - pipx
+      - python3-venv
+    state: present
+
+- name: Ansible partagé
+  ansible.builtin.command:
+    cmd: pipx install --include-deps ansible
+  environment:
+    PIPX_HOME: "{{ admin_pipx_home }}"
+    PIPX_BIN_DIR: "{{ admin_ansible_bin }}"
+  args:
+    creates: "{{ admin_ansible_bin }}/ansible-playbook"
+
+- name: Bibliothèques Python complémentaires
+  ansible.builtin.command:
+    cmd: pipx inject ansible kubernetes proxmoxer requests
+  environment:
+    PIPX_HOME: "{{ admin_pipx_home }}"
+    PIPX_BIN_DIR: "{{ admin_ansible_bin }}"
+  register: pipx_inject
+  changed_when: "'injected package' in pipx_inject.stdout"
+
+- name: Répertoire des collections partagées
+  ansible.builtin.file:
+    path: "{{ admin_collections_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Collections Ansible partagées
+  ansible.builtin.command:
+    cmd: >
+      {{ admin_ansible_bin }}/ansible-galaxy collection install
+      -r {{ playbook_dir }}/requirements.yml
+      -p {{ admin_collections_path }}
+  register: galaxy_install
+  changed_when: "'Installing' in galaxy_install.stdout"
