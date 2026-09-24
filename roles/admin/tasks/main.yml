@@ -1,4 +1,7 @@
 ---
+- name: Installation partagée d'Ansible
+  ansible.builtin.import_tasks: ansible.yml
+
 - name: Service ansible-pull
   ansible.builtin.template:
     src: ansible-pull.service.j2
