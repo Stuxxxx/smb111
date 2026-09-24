@@ -65,3 +65,34 @@
     state: "{{ 'started' if admin_maintenance_enabled else 'stopped' }}"
     enabled: "{{ admin_maintenance_enabled }}"
     daemon_reload: true
+
+- name: Dossier des rapports de contrôle
+  ansible.builtin.file:
+    path: "{{ admin_rapports_dir }}"
+    state: directory
+    owner: root
+    group: admins
+    mode: "0770"
+
+- name: Service de contrôle
+  ansible.builtin.template:
+    src: check.service.j2
+    dest: /etc/systemd/system/check.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Timer de contrôle
+  ansible.builtin.template:
+    src: check.timer.j2
+    dest: /etc/systemd/system/check.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Activer ou désactiver le timer de contrôle
+  ansible.builtin.systemd_service:
+    name: check.timer
+    state: "{{ 'started' if admin_check_enabled else 'stopped' }}"
+    enabled: "{{ admin_check_enabled }}"
+    daemon_reload: true

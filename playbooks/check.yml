@@ -1,89 +1,45 @@
 ---
 # Contrôle de conformité du parc (FCT 05), pendant de maintenance.yml.
 # Lecture seule sur les machines : seul le cache apt est rafraîchi.
-# Le rapport Markdown est écrit sur le nœud de contrôle, dans rapports/.
+# Le rapport Markdown est écrit sur le nœud de contrôle.
 #
 #   ansible-playbook playbooks/check.yml
 #   ansible-playbook playbooks/check.yml --limit rasb
 #   ansible-playbook playbooks/check.yml -e check_echec_si_non_conforme=true
-#   ansible-playbook playbooks/check.yml --tags install_timer -K    # programme le timer
+#
+# La programmation (timer systemd) est assurée par le rôle admin,
+# variable admin_check_enabled.
 #
 # Variables surchargeables (group_vars, host_vars ou -e) :
-#   check_comptes_autorises      comptes à shell interactif attendus  (défaut : [root])
-#   check_rapports_dir           dossier des rapports                  (défaut : <projet>/rapports)
+#   check_comptes_autorises      comptes interactifs attendus (défaut : root + admins du dépôt)
+#   check_timers_attendus        timers systemd devant être actifs
+#   check_disque_seuil           % libre minimal accepté               (défaut : 15)
+#   check_rapports_dir           dossier des rapports                  (défaut : /var/log/smb111)
 #   check_retention_jours        conservation des rapports, en jours   (défaut : 30)
-#   check_calendrier             OnCalendar du timer systemd           (défaut : *-*-* 06:00)
 #   check_echec_si_non_conforme  code retour ≠ 0 si un hôte est KO     (défaut : false)
 
-# ---------------------------------------------------------------------------
-# 0. Programmation : ne s'exécute qu'avec --tags install_timer
-# ---------------------------------------------------------------------------
-- name: Programmer le contrôle (timer systemd)
-  hosts: localhost
-  connection: local
-  gather_facts: false
-  become: true
-  tags: [never, install_timer]
-
-  vars:
-    projet_dir: "{{ playbook_dir | dirname }}"
-    utilisateur: "{{ lookup('ansible.builtin.env', 'USER') }}"
-    ansible_playbook_bin: "{{ lookup('ansible.builtin.pipe', 'command -v ansible-playbook') }}"
-
-  tasks:
-    - name: Unité de service
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/ansible-check.service
-        owner: root
-        group: root
-        mode: "0644"
-        content: |
-          [Unit]
-          Description=Contrôle de conformité du parc (check.yml)
-          Wants=network-online.target
-          After=network-online.target
-
-          [Service]
-          Type=oneshot
-          User={{ utilisateur }}
-          WorkingDirectory={{ projet_dir }}
-          ExecStart={{ ansible_playbook_bin }} playbooks/check.yml -e check_echec_si_non_conforme=true
-
-    - name: Timer
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/ansible-check.timer
-        owner: root
-        group: root
-        mode: "0644"
-        content: |
-          [Unit]
-          Description=Planification du contrôle de conformité
-
-          [Timer]
-          OnCalendar={{ check_calendrier | default('*-*-* 06:00') }}
-          RandomizedDelaySec=10min
-          Persistent=true
-
-          [Install]
-          WantedBy=timers.target
-
-    - name: Activer le timer
-      ansible.builtin.systemd:
-        name: ansible-check.timer
-        enabled: true
-        state: started
-        daemon_reload: true
-
-# ---------------------------------------------------------------------------
-# 1. Contrôles, en parallèle sur tout le parc
-# ---------------------------------------------------------------------------
 - name: Contrôles de conformité
   hosts: all
-  become: true
   gather_facts: false
 
   vars:
-    comptes_autorises: "{{ check_comptes_autorises | default(['root']) }}"
+    # Ordre explicite des contrôles : sert au tableau ET au résumé.
+    check_ordre:
+      - reboot
+      - securite
+      - ssh
+      - fail2ban
+      - comptes
+      - disque
+      - timers
+      - horloge
+
+    # Les administrateurs déclarés dans le dépôt sont légitimes par construction.
+    comptes_autorises: >-
+      {{ check_comptes_autorises
+         | default(['root'] + (admins | default([])
+           | rejectattr('state', 'defined') | map(attribute='name') | list)) }}
+
     shells_non_interactifs:
       - /usr/sbin/nologin
       - /sbin/nologin
@@ -94,6 +50,21 @@
       - /sbin/shutdown
 
   tasks:
+    # --- Espace disque ------------------------------------------------------
+    - name: Volumes dont l'espace libre passe sous le seuil
+      ansible.builtin.shell: |
+        set -o pipefail
+        df -P -x tmpfs -x devtmpfs -x overlay -x squashfs \
+          | awk -v seuil={{ check_disque_seuil | default(15) | int }} '
+              NR > 1 {
+                gsub(/%/, "", $5)
+                if (100 - $5 < seuil) print $NF " (" $5 "% utilise)"
+              }'
+      args:
+        executable: /bin/bash
+      register: df_bas
+      changed_when: false
+
     # --- Redémarrage en attente ---------------------------------------------
     - name: Redémarrage en attente ?
       ansible.builtin.stat:
@@ -104,6 +75,7 @@
       ansible.builtin.slurp:
         src: /var/run/reboot-required.pkgs
       register: reboot_pkgs
+      become: true
       when: reboot_required.stat.exists
       failed_when: false
 
@@ -112,17 +84,29 @@
       ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
+      become: true
       changed_when: false
       failed_when: false
 
-    - name: Paquets à mettre à jour
-      ansible.builtin.command: apt list --upgradable
-      register: apt_upgradable
+    - name: Mises à jour disponibles
+      ansible.builtin.command: apt-get --simulate dist-upgrade
+      environment:
+        LC_ALL: C
+      register: apt_simulate
       changed_when: false
+      failed_when: false
+
+    - name: Mises à jour de sécurité automatiques activées ?
+      ansible.builtin.slurp:
+        src: /etc/apt/apt.conf.d/20auto-upgrades
+      register: auto_upgrades
+      become: true
+      failed_when: false
 
     # --- SSH : authentification par clé uniquement --------------------------
     - name: Configuration effective de sshd
       ansible.builtin.command: sshd -T
+      become: true
       register: sshd_config
       changed_when: false
       failed_when: false
@@ -133,6 +117,7 @@
 
     - name: Jail sshd de fail2ban
       ansible.builtin.command: fail2ban-client status sshd
+      become: true
       register: f2b_sshd
       changed_when: false
       failed_when: false
@@ -142,7 +127,24 @@
       ansible.builtin.getent:
         database: passwd
 
-    # --- Certificats : à venir ----------------------------------------------
+    # --- Timers attendus ----------------------------------------------------
+    - name: État des timers attendus
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      register: timers_state
+      changed_when: false
+      failed_when: false
+      loop: "{{ check_timers_attendus | default([]) }}"
+      loop_control:
+        label: "{{ item }}"
+
+    # --- Horloge ------------------------------------------------------------
+    - name: Synchronisation de l'heure
+      ansible.builtin.command: timedatectl show -p NTPSynchronized --value
+      register: ntp_sync
+      changed_when: false
+      failed_when: false
+
+    # --- Certificats et tunnel WireGuard : à venir --------------------------
 
     # --- Synthèse -----------------------------------------------------------
     - name: Synthèse des contrôles
@@ -150,17 +152,22 @@
         check_resultats:
           reboot:
             ok: "{{ not reboot_required.stat.exists }}"
-            detail: "{{ pkgs_reboot | join(', ') or 'fichier reboot-required présent' }}"
+            detail: "{{ pkgs_reboot | join(', ') or 'aucun redémarrage en attente' }}"
           securite:
-            ok: "{{ maj_secu | length == 0 }}"
+            ok: "{{ maj_secu | length == 0 and auto_actif }}"
             detail: >-
-              {{ maj_secu | length }} correctif(s) : {{ maj_secu[:10] | join(', ') }}{{ ' …' if maj_secu | length > 10 else '' }}
+              {{ maj_secu | length }} correctif(s) de sécurité
+              {{ '(' ~ maj_secu[:10] | join(', ') ~ (' …' if maj_secu | length > 10 else '') ~ ')' if maj_secu else '' }} ;
+              {{ maj_totales | length }} mise(s) à jour au total ;
+              unattended-upgrades {{ 'actif' if auto_actif else '**inactif**' }}
           ssh:
-            ok: "{{ ssh_password == 'no' and ssh_kbd == 'no' }}"
+            ok: "{{ ssh_password == 'no' and ssh_kbd == 'no' and ssh_root == 'no' }}"
             detail: >-
               {{ ('sshd -T en échec : ' ~ (sshd_config.stderr | default('') or sshd_config.msg | default('?')))
                  if sshd_config.rc | default(1) != 0
-                 else 'PasswordAuthentication ' ~ ssh_password ~ ', KbdInteractiveAuthentication ' ~ ssh_kbd }}
+                 else 'PasswordAuthentication ' ~ ssh_password
+                      ~ ', KbdInteractive ' ~ ssh_kbd
+                      ~ ', PermitRootLogin ' ~ ssh_root }}
           fail2ban:
             ok: "{{ f2b.state == 'running' and f2b.status == 'enabled' and f2b_sshd.rc | default(1) == 0 }}"
             detail: >-
@@ -171,12 +178,33 @@
             detail: >-
               hors liste : {{ comptes_hors_liste | join(', ') or 'aucun' }} ;
               UID 0 hors root : {{ uid0_hors_root | join(', ') or 'aucun' }}
+          disque:
+            ok: "{{ montages_satures | length == 0 }}"
+            detail: >-
+              {{ montages_satures | join(', ')
+                 or 'tous les volumes au-dessus de ' ~ seuil ~ ' % libres' }}
+          timers:
+            ok: "{{ timers_ko | length == 0 }}"
+            detail: >-
+              {{ 'inactifs : ' ~ timers_ko | join(', ') if timers_ko
+                 else (check_timers_attendus | default([]) | length | string) ~ ' timer(s) actif(s)' }}
+          horloge:
+            ok: "{{ ntp_sync.stdout | default('') | trim == 'yes' }}"
+            detail: "NTPSynchronized={{ ntp_sync.stdout | default('inconnu') | trim }}"
       vars:
+        seuil: "{{ check_disque_seuil | default(15) | int }}"
         pkgs_reboot: >-
           {{ (reboot_pkgs.content | default('') | b64decode).split() | unique | list }}
+        # apt-get --simulate : lignes « Inst <paquet> [ancienne] (nouvelle Origine …) »
+        lignes_inst: >-
+          {{ apt_simulate.stdout_lines | default([]) | select('match', '^Inst ') | list }}
+        maj_totales: >-
+          {{ lignes_inst | map('regex_replace', '^Inst (\S+).*$', '\1') | list }}
         maj_secu: >-
-          {{ apt_upgradable.stdout_lines | select('search', '-security')
-             | map('regex_replace', '/.*$', '') | list }}
+          {{ lignes_inst | select('search', 'Security')
+             | map('regex_replace', '^Inst (\S+).*$', '\1') | list }}
+        auto_actif: >-
+          {{ 'Unattended-Upgrade "1"' in (auto_upgrades.content | default('') | b64decode) }}
         ssh_password: >-
           {{ sshd_config.stdout | default('')
              | regex_findall('^passwordauthentication (\S+)', multiline=True) | first | default('inconnu') }}
@@ -184,6 +212,9 @@
           {{ sshd_config.stdout | default('')
              | regex_findall('^(?:kbdinteractive|challengeresponse)authentication (\S+)', multiline=True)
              | first | default('inconnu') }}
+        ssh_root: >-
+          {{ sshd_config.stdout | default('')
+             | regex_findall('^permitrootlogin (\S+)', multiline=True) | first | default('inconnu') }}
         f2b: >-
           {{ ansible_facts.services['fail2ban.service']
              | default({'state': 'absent', 'status': 'absent'}) }}
@@ -196,22 +227,30 @@
           {{ ansible_facts.getent_passwd | dict2items
              | selectattr('value.1', 'equalto', '0')
              | map(attribute='key') | reject('equalto', 'root') | list }}
+        montages_satures: "{{ df_bas.stdout_lines | default([]) }}"
+        timers_ko: >-
+          {{ timers_state.results | default([])
+             | rejectattr('stdout', 'equalto', 'enabled')
+             | map(attribute='item') | list }}
 
     - name: Statut global de l'hôte
       ansible.builtin.set_fact:
-        check_resume: "{{ statuts | map('ternary', 'OK', '**KO**') | list }}"
+        check_resume: >-
+          {{ check_ordre | map('extract', check_resultats) | map(attribute='ok')
+             | map('bool') | map('ternary', 'OK', '**KO**') | list }}
         check_conforme: "{{ false not in statuts }}"
       vars:
-        statuts: "{{ check_resultats.values() | map(attribute='ok') | map('bool') | list }}"
+        statuts: >-
+          {{ check_ordre | map('extract', check_resultats) | map(attribute='ok') | map('bool') | list }}
 
-    # --- Rapport, écrit une seule fois sur le nœud de contrôle -------------
+    # --- Rapport, écrit une seule fois sur le nœud de contrôle --------------
     # (dans ce play et non dans un play localhost, sinon --limit le filtrerait)
     - name: Rapport de conformité
       run_once: true
       delegate_to: localhost
       become: false
       vars:
-        rapports_dir: "{{ check_rapports_dir | default(playbook_dir | dirname ~ '/rapports') }}"
+        rapports_dir: "{{ check_rapports_dir | default('/var/log/smb111') }}"
         cibles: "{{ query('ansible.builtin.inventory_hostnames', ansible_limit | default('all')) }}"
         conformes: >-
           {{ cibles | map('extract', hostvars)
@@ -223,33 +262,27 @@
           ansible.builtin.set_fact:
             horodatage: "{{ now(fmt='%Y-%m-%d_%H%M') }}"
 
-        - name: Dossier des rapports
-          ansible.builtin.file:
-            path: "{{ rapports_dir }}"
-            state: directory
-            mode: "0755"
-
         - name: Écrire le rapport
           ansible.builtin.copy:
             dest: "{{ rapports_dir }}/check_{{ horodatage }}.md"
-            mode: "0644"
+            mode: "0640"
             content: |
               # Contrôle de conformité du {{ horodatage }}
 
               **{{ conformes | length }}/{{ cibles | length }}** hôtes conformes.
 
-              | Hôte | Reboot | Sécurité | SSH | fail2ban | Comptes |
-              |------|--------|----------|-----|----------|---------|
+              | Hôte | {{ check_ordre | join(' | ') }} |
+              |------|{{ '--------|' * (check_ordre | length) }}
               {% for h in cibles -%}
-              | {{ h }} | {{ hostvars[h].check_resume | default(['injoignable', '—', '—', '—', '—']) | join(' | ') }} |
+              | {{ h }} | {{ hostvars[h].check_resume | default(['injoignable'] + ['—'] * (check_ordre | length - 1)) | join(' | ') }} |
               {% endfor %}
 
               {% for h in non_conformes -%}
               ## {{ h }}
 
               {% if hostvars[h].check_resultats is defined -%}
-              {% for nom, c in hostvars[h].check_resultats.items() if not c.ok | bool -%}
-              - **{{ nom }}** : {{ c.detail }}
+              {% for nom in check_ordre if not hostvars[h].check_resultats[nom].ok | bool -%}
+              - **{{ nom }}** : {{ hostvars[h].check_resultats[nom].detail }}
               {% endfor %}
               {% else -%}
               - Hôte non contrôlé (injoignable ou erreur d'exécution).

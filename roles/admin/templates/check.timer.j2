@@ -1,0 +1,10 @@
+[Unit]
+Description=Contrôle de conformité quotidien
+
+[Timer]
+OnCalendar={{ admin_check_schedule }}
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

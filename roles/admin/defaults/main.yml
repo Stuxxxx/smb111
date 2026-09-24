@@ -16,3 +16,8 @@ admin_maintenance_schedule: "Sun *-*-* 03:00:00"
 admin_ansible_bin: /usr/local/bin
 admin_pipx_home: /opt/pipx
 admin_collections_path: /usr/share/ansible/collections
+
+# Contrôle de conformité
+admin_check_enabled: false
+admin_check_schedule: "*-*-* 06:00:00"
+admin_rapports_dir: /var/log/smb111
