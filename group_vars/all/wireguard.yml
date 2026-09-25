@@ -1,0 +1,7 @@
+---
+# Pairs WireGuard. Une entrée par appareil, pas par personne.
+# Plages : 10.99.0.1 = rasb, .2 à .50 = administrateurs.
+wg_peers_declares:
+  - name: sacha-laptop
+    public_key: "dxHEGVK/2oBpqdi8qXi8uwzYXoKKby85ToDbj9nTfRw="
+    ip: 10.99.0.2

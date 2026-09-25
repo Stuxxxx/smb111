@@ -3,3 +3,4 @@
 kubeconfig*
 vault_bootstrap.yml
 rapports/
+wg-*.conf.example
