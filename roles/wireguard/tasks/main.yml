@@ -1,0 +1,36 @@
+---
+- name: Paquet wireguard
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+  when: wg_enabled | bool
+
+- name: Routage IP activé
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_set: true
+    state: present
+    reload: true
+  when:
+    - wg_enabled | bool
+    - wg_route_lan | bool
+
+- name: Configuration du tunnel
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  when: wg_enabled | bool
+  no_log: true
+  notify: restart wireguard
+
+- name: Service wg-quick
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ wg_interface }}"
+    state: "{{ 'started' if wg_enabled | bool else 'stopped' }}"
+    enabled: "{{ wg_enabled | bool }}"
+    daemon_reload: true
+  when: not ansible_check_mode
