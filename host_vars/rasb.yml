@@ -15,3 +15,13 @@ check_timers_attendus: >-
      + (['maintenance.timer'] if admin_maintenance_enabled | default(false) else [])
      + (['check.timer'] if admin_check_enabled | default(false) else [])
      + ['apt-daily.timer', 'apt-daily-upgrade.timer'] }}
+
+#configuration wireguard
+wg_enabled: true
+wg_private_key: "{{ vault_wg_rasb_private }}"
+wg_route_lan: true
+wg_lan_iface: eth0
+wg_peers:
+  - name: laptop-sacha
+    public_key: "dxHEGVK/2oBpqdi8qXi8uwzYXoKKby85ToDbj9nTfRw="
+    ip: 10.99.0.2

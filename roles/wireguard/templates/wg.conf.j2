@@ -1,0 +1,16 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[Interface]
+Address = {{ wg_address }}
+ListenPort = {{ wg_port }}
+PrivateKey = {{ wg_private_key }}
+{% if wg_route_lan %}
+PostUp = nft add table ip wgnat; nft add chain ip wgnat post { type nat hook postrouting priority 100 \; }; nft add rule ip wgnat post oifname "{{ wg_lan_iface }}" masquerade
+PostDown = nft delete table ip wgnat
+{% endif %}
+{% for peer in wg_peers %}
+
+# {{ peer.name }}
+[Peer]
+PublicKey = {{ peer.public_key }}
+AllowedIPs = {{ peer.ip }}/32
+{% endfor %}
