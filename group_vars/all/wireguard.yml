@@ -5,3 +5,6 @@ wg_peers_declares:
   - name: sacha-laptop
     public_key: "dxHEGVK/2oBpqdi8qXi8uwzYXoKKby85ToDbj9nTfRw="
     ip: 10.99.0.2
+  - name: orfeo-laptop
+    public_key: "5MSP9FeDY4XMIDgrMURIGn2ar+u4Ee3n2fW8efo+Gi4="
+    ip: 10.99.0.3
