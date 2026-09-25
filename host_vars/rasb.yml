@@ -21,7 +21,4 @@ wg_enabled: true
 wg_private_key: "{{ vault_wg_rasb_private }}"
 wg_route_lan: true
 wg_lan_iface: eth0
-wg_peers:
-  - name: laptop-sacha
-    public_key: "dxHEGVK/2oBpqdi8qXi8uwzYXoKKby85ToDbj9nTfRw="
-    ip: 10.99.0.2
+wg_peers: "{{ wg_peers_declares }}"

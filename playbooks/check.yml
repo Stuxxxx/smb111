@@ -33,6 +33,7 @@
       - disque
       - timers
       - horloge
+      - wireguard
 
     # Les administrateurs déclarés dans le dépôt sont légitimes par construction.
     comptes_autorises: >-
@@ -144,7 +145,15 @@
       changed_when: false
       failed_when: false
 
-    # --- Certificats et tunnel WireGuard : à venir --------------------------
+    # --- Certificats : à venir --------------------------
+    # --- Tunnel WireGuard ---------------------------------------------------
+    - name: État du tunnel WireGuard
+      ansible.builtin.command: "wg show {{ check_wg_interface | default('wg0') }} latest-handshakes"
+      become: true
+      register: wg_state
+      changed_when: false
+      failed_when: false
+      when: wg_enabled | default(false) | bool
 
     # --- Synthèse -----------------------------------------------------------
     - name: Synthèse des contrôles
@@ -191,6 +200,15 @@
           horloge:
             ok: "{{ ntp_sync.stdout | default('') | trim == 'yes' }}"
             detail: "NTPSynchronized={{ ntp_sync.stdout | default('inconnu') | trim }}"
+          wireguard:
+            ok: "{{ not (wg_enabled | default(false) | bool) or wg_ok }}"
+            detail: >-
+              {{ 'tunnel désactivé sur cette machine'
+                 if not (wg_enabled | default(false) | bool)
+                 else ('interface absente ou en échec'
+                       if wg_state.rc | default(1) != 0
+                       else (wg_pairs_actifs | length | string) ~ '/' ~ (wg_pairs | length | string)
+                            ~ ' pair(s) avec un handshake récent') }}
       vars:
         seuil: "{{ check_disque_seuil | default(15) | int }}"
         pkgs_reboot: >-
@@ -215,6 +233,11 @@
         ssh_root: >-
           {{ sshd_config.stdout | default('')
              | regex_findall('^permitrootlogin (\S+)', multiline=True) | first | default('inconnu') }}
+        wg_pairs: "{{ wg_state.stdout_lines | default([]) }}"
+        wg_pairs_actifs: >-
+          {{ wg_pairs | map('regex_replace', '^\S+\s+', '') | map('int')
+             | select('gt', 0) | list }}
+        wg_ok: "{{ wg_state.rc | default(1) == 0 }}"
         f2b: >-
           {{ ansible_facts.services['fail2ban.service']
              | default({'state': 'absent', 'status': 'absent'}) }}
