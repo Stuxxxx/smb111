@@ -11,3 +11,6 @@ wg_peers_declares:
   - name: proxmox
     public_key: "/ySDceqxXtEsQaIqob1g+qWw2Yp3tBKKiCEm8OTM5Gc="
     ip: 10.99.0.100
+  - name: sacha-fix
+    public_key: "iOvt8v6dKcUyHp7QseSz0ysDxDaAwna7sCmFw4Hzem0="
+    ip: 10.99.0.4
