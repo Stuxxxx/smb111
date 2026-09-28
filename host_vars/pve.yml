@@ -1,0 +1,13 @@
+unattended_blacklist:
+  - k3s
+  - containerd
+  - kubelet
+  - pve-manager
+  - proxmox-ve
+  - pve-kernel
+
+# Le tunnel est déjà authentifié par clé : ne pas s'y bannir soi-même
+fail2ban_ignoreip: "127.0.0.1/8 ::1 10.99.0.0/24"
+
+# Le compte de service n'est pas dans la liste du dépôt
+check_comptes_autorises: "{{ ['root', 'ansible'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"
