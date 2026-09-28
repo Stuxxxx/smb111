@@ -1,0 +1,142 @@
+---
+# Création des VM du SI sur l'hyperviseur Proxmox, par clonage du template
+# cloud-init. Exécuté depuis la machine d'administration, via l'API.
+#
+#   ansible-playbook playbooks/provision.yml
+#   ansible-playbook playbooks/provision.yml -e cible=fw
+#   ansible-playbook playbooks/provision.yml -e demarrer=false
+#
+# Prérequis : template debian-13-template (vmid 9000), jeton d'API dans le vault,
+# tunnel wg0 actif vers l'hyperviseur.
+
+- name: Créer les VM sur Proxmox
+  hosts: proxmox
+  gather_facts: false
+  connection: local
+
+  vars:
+    ansible_python_interpreter: /opt/pipx/venvs/ansible/bin/python
+    demarrer: true
+    cible: ""
+    vms_cibles: >-
+      {{ vms | selectattr('name', 'equalto', cible) | list if cible else vms }}
+
+    pve: &pve
+      api_host: "{{ pve_api_host }}"
+      api_user: "{{ pve_api_user }}"
+      api_token_id: "{{ pve_api_token_id }}"
+      api_token_secret: "{{ pve_api_token_secret }}"
+      validate_certs: false
+      node: "{{ pve_node }}"
+
+  tasks:
+    - name: Vérifier que le template existe
+      community.proxmox.proxmox_vm_info:
+        <<: *pve
+        name: "{{ pve_template }}"
+      register: template_info
+      failed_when: template_info.proxmox_vms | length == 0
+
+    - name: Cloner le template
+      community.proxmox.proxmox_kvm:
+        <<: *pve
+        clone: "{{ pve_template }}"
+        name: "{{ item.name }}"
+        newid: "{{ item.vmid }}"
+        storage: "{{ pve_storage }}"
+        full: true
+        timeout: 300
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.vmid }})"
+
+    - name: Dimensionner CPU et mémoire
+      community.proxmox.proxmox_kvm:
+        <<: *pve
+        vmid: "{{ item.vmid }}"
+        cores: "{{ item.cores }}"
+        memory: "{{ item.memory }}"
+        onboot: true
+        update: true
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Taille actuelle du disque
+      ansible.builtin.command: "qm config {{ item.vmid }}"
+      delegate_to: pve
+      connection: ssh
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      register: qm_conf
+      changed_when: false
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Agrandir le disque si nécessaire
+      ansible.builtin.command: "qm resize {{ item.item.vmid }} scsi0 {{ item.item.disk }}G"
+      delegate_to: pve
+      connection: ssh
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      when: "'size=' ~ item.item.disk ~ 'G' not in item.stdout"
+      loop: "{{ qm_conf.results }}"
+      loop_control:
+        label: "{{ item.item.name }} → {{ item.item.disk }} Go"
+
+    - name: Interface externe du pare-feu
+      community.proxmox.proxmox_nic:
+        <<: *pve
+        vmid: "{{ item.vmid }}"
+        interface: net1
+        bridge: "{{ pve_bridge_externe }}"
+        state: present
+      loop: "{{ vms_cibles | selectattr('externe', 'defined') | selectattr('externe') | list }}"
+      loop_control:
+        label: "{{ item.name }} → {{ pve_bridge_externe }}"
+
+    - name: Injecter la configuration cloud-init
+      community.proxmox.proxmox_kvm:
+        <<: *pve
+        vmid: "{{ item.vmid }}"
+        ciuser: ansible
+        cipassword: ""
+        sshkeys: "{{ lookup('ansible.builtin.file', '~/.ssh/smb111.pub') }}"
+        nameservers: "{{ '1.1.1.1' if item.name == 'fw' else passerelle_interne }}"
+        ipconfig:
+          ipconfig0: "ip={{ item.ip }}/24{{ ',gw=' ~ passerelle_interne if item.name != 'fw' else '' }}"
+          ipconfig1: "{{ 'ip=' ~ fw_ip_externe ~ '/24,gw=' ~ passerelle_externe if item.name == 'fw' else '' }}"
+        update: true
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }} → {{ item.ip }}"
+
+    - name: Démarrer les VM
+      community.proxmox.proxmox_kvm:
+        <<: *pve
+        vmid: "{{ item.vmid }}"
+        state: started
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: demarrer | bool
+
+    - name: Attendre que SSH réponde
+      ansible.builtin.wait_for:
+        host: "{{ item.ip }}"
+        port: 22
+        timeout: 300
+        delay: 10
+      loop: "{{ vms_cibles }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.ip }})"
+      when:
+        - demarrer | bool
+        - item.name != 'fw'      # fw est la passerelle : joignable une fois configuré
+
+    - name: Récapitulatif
+      ansible.builtin.debug:
+        msg: >-
+          {{ vms_cibles | length }} VM traitée(s) :
+          {{ vms_cibles | map(attribute='name') | join(', ') }}
