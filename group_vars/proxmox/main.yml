@@ -14,4 +14,4 @@ pve_bridge_externe: vmbr0
 reseau_interne: 10.10.0
 passerelle_interne: 10.10.0.1
 fw_ip_externe: 192.168.1.70
-passerelle_externe: 192.168.1.1
+passerelle_externe: 192.168.1.254
