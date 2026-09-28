@@ -2,6 +2,12 @@
   hosts: all
   become: true
   tasks:
+
+    - name: Paquet sudo
+      ansible.builtin.apt:
+        name: sudo
+        state: present
+
     - name: Groupe admins
       ansible.builtin.group:
         name: admins
