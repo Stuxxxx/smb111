@@ -96,3 +96,13 @@
     state: "{{ 'started' if admin_check_enabled else 'stopped' }}"
     enabled: "{{ admin_check_enabled }}"
     daemon_reload: true
+
+- name: Clé SSH du projet
+  ansible.builtin.copy:
+    content: "{{ vault_smb111_private_key }}"
+    dest: "/home/{{ admin_pull_user }}/.ssh/smb111"
+    owner: "{{ admin_pull_user }}"
+    group: "{{ admin_pull_user }}"
+    mode: "0600"
+  no_log: true
+  when: vault_smb111_private_key is defined
