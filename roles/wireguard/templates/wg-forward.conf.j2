@@ -1,0 +1,13 @@
+# Géré par Ansible — relais entre pairs du tunnel {{ wg_interface }}
+
+table ip wgfwd {
+  chain relais {
+    type filter hook forward priority 0; policy accept;
+
+    ct state established,related accept
+{% for r in wg_relais %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_interface }}" ip daddr {{ r.vers }} tcp dport {{ r.port }} accept comment "{{ r.commentaire | default('relais') }}"
+{% endfor %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_interface }}" drop
+  }
+}
