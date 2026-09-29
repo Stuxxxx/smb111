@@ -3,3 +3,9 @@
   ansible.builtin.systemd_service:
     name: "wg-quick@{{ wg_interface }}"
     state: restarted
+
+- name: recharger les relais
+  ansible.builtin.systemd_service:
+    name: wg-forward
+    state: restarted
+    daemon_reload: true

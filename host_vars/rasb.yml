@@ -22,3 +22,8 @@ wg_private_key: "{{ vault_wg_rasb_private }}"
 wg_route_lan: true
 wg_lan_iface: eth0
 wg_peers: "{{ wg_peers_declares }}"
+
+wg_relais:
+  - vers: 10.99.0.100
+    port: 8006
+    commentaire: "interface web Proxmox"
