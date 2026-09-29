@@ -14,3 +14,6 @@ wg_peers_declares:
   - name: sacha-fix
     public_key: "iOvt8v6dKcUyHp7QseSz0ysDxDaAwna7sCmFw4Hzem0="
     ip: 10.99.0.4
+  - name: kilian-laptop
+    public_key: "+9Q5/R6nuX/wjZOSWZFl2mL+yRI9X2aXOLjFFHOlRA8="
+    ip: 10.99.0.5
