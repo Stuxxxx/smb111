@@ -17,3 +17,6 @@ wg_peers_declares:
   - name: kilian-laptop
     public_key: "+9Q5/R6nuX/wjZOSWZFl2mL+yRI9X2aXOLjFFHOlRA8="
     ip: 10.99.0.5
+  - name: leo-laptop
+    public_key: "2f1iAYqsZRd4D4Z86X0ssWRE1mMwRY1XLNrPSZQyMQ4="
+    ip: 10.99.0.6
