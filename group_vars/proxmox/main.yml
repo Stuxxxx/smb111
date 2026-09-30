@@ -4,7 +4,7 @@ pve_api_host: 10.99.0.100
 pve_api_user: ansible@pve
 pve_api_token_id: smb111
 pve_api_token_secret: "{{ vault_pve_token }}"
-pve_node: proxmox                 # nom du nœud, tel qu'il apparaît dans l'interface
+pve_node: pve                 # nom du nœud, tel qu'il apparaît dans l'interface
 pve_storage: local-lvm
 pve_template: debian-13-template
 
