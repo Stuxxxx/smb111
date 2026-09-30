@@ -1,0 +1,12 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[OPTIONS]
+
+enable: 1
+policy_in: DROP
+policy_out: ACCEPT
+
+[IPSET management] # accès d'administration à l'hyperviseur
+
+{% for source in pve_fw_management %}
+{{ source }}
+{% endfor %}
