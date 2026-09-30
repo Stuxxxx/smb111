@@ -25,6 +25,10 @@ table inet filtre {
 
     # DNS pour les VM internes
     iifname $IF_INT ip saddr $RESEAU_INT meta l4proto { tcp, udp } th dport 53 accept
+
+    # Diffusions du réseau local (découverte de services, IGMP de la box) :
+    # rejetées sans journal, pour que celui-ci ne montre que les vraies tentatives
+    meta pkttype { broadcast, multicast } drop
 {% if fw_log_rejets %}
 
     limit rate {{ fw_log_debit }} log prefix "fw-input-rejet: " level info

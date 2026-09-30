@@ -17,9 +17,9 @@
 
 # Ansible est connecté par ce compte : on vérifie qu'une nouvelle connexion
 # passe encore, pour découvrir une erreur ici plutôt qu'au passage suivant.
-- name: Rouvrir la connexion SSH après modification de la clé
+# reset_connection ignore toute condition : il est exécuté à chaque passage.
+- name: Rouvrir la connexion SSH
   ansible.builtin.meta: reset_connection
-  when: compte_ansible_cle_posee is changed
 
 - name: La connexion par clé fonctionne toujours
   ansible.builtin.ping:
