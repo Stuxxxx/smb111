@@ -7,6 +7,8 @@ define IF_EXT = "{{ fw_iface_externe }}"
 define RESEAU_INT = {{ fw_reseau_interne }}
 define ADMIN = { {{ fw_ssh_sources | join(', ') }} }
 define INTERDITS = { {{ fw_destinations_interdites | join(', ') }} }
+define IF_LIEN = "{{ fw_lien_iface }}"
+define ADMIN_LIEN = {{ fw_lien_admin }}
 
 table inet filtre {
   chain input {
@@ -22,6 +24,11 @@ table inet filtre {
 
     # Administration : SSH depuis rasb uniquement
     iifname $IF_EXT ip saddr $ADMIN tcp dport 22 accept
+
+    # Lien wg1 : établi par rasb seul ; à l'intérieur, SSH et DNS
+    iifname $IF_EXT ip saddr $ADMIN udp dport {{ fw_lien_port }} accept
+    iifname $IF_LIEN ip saddr $ADMIN_LIEN tcp dport 22 accept
+    iifname $IF_LIEN ip saddr $ADMIN_LIEN meta l4proto { tcp, udp } th dport 53 accept
 
     # DNS pour les VM internes
     iifname $IF_INT ip saddr $RESEAU_INT meta l4proto { tcp, udp } th dport 53 accept
@@ -40,6 +47,10 @@ table inet filtre {
 
     ct state established,related accept
     ct state invalid drop
+
+    # rasb, par wg1, administre les VM internes (sans NAT : les VM voient son adresse)
+    iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT tcp dport { {{ fw_lien_ports_internes | join(', ') }} } accept
+    iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT icmp type echo-request accept
 
     # Les VM sortent vers Internet, jamais vers le réseau local
     iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT ip daddr $INTERDITS drop

@@ -27,3 +27,14 @@ wg_relais:
   - vers: 10.99.0.100
     port: 8006
     commentaire: "interface web Proxmox"
+
+# Lien d'administration wg1 vers fw : route vers le réseau interne des VM
+wg_lien_enabled: true
+wg_lien_adresse: "{{ lien_admin_rasb }}/30"
+wg_lien_cle_privee: "{{ vault_wg_lien_rasb_private | default('') }}"
+wg_lien_pair:
+  nom: fw
+  public_key: "{{ wg_lien_cle_publique_fw }}"
+  allowed_ips: ["{{ lien_admin_fw }}/32", "{{ reseau_interne }}.0/24"]
+  endpoint: "{{ fw_ip_externe }}:{{ lien_admin_port }}"
+  keepalive: 25
