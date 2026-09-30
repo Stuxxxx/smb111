@@ -9,7 +9,7 @@ wg_peers_declares:
     public_key: "5MSP9FeDY4XMIDgrMURIGn2ar+u4Ee3n2fW8efo+Gi4="
     ip: 10.99.0.3
   - name: proxmox
-    public_key: "/ySDceqxXtEsQaIqob1g+qWw2Yp3tBKKiCEm8OTM5Gc="
+    public_key: "VX3nmOtbvy431FawhcjUkWHK4ZNW+dkpEh1c7krMI1g="
     ip: 10.99.0.100
   - name: sacha-fix
     public_key: "iOvt8v6dKcUyHp7QseSz0ysDxDaAwna7sCmFw4Hzem0="
