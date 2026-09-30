@@ -7,6 +7,13 @@ fw_reseau_interne: "{{ reseau_interne }}.0/24"
 # SSH accepté sur l'interface externe depuis ces seules adresses
 fw_ssh_sources: ["{{ admin_ip_lan }}"]
 
+# Lien d'administration wg1 : rasb y joint fw et les VM internes
+fw_lien_iface: wg1
+fw_lien_port: "{{ lien_admin_port }}"
+fw_lien_admin: "{{ lien_admin_rasb }}"
+# Ports des VM internes ouverts à rasb (SSH, API Kubernetes)
+fw_lien_ports_internes: [22, 6443]
+
 # Destinations interdites aux VM : le réseau local (box, hyperviseur, postes).
 # Seul Internet leur est accessible, via la NAT.
 fw_destinations_interdites: ["192.168.1.0/24"]
