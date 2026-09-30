@@ -23,5 +23,5 @@ wg_peers_declares:
 
 # Lien wg1 (rasb ↔ fw). Clés publiques ; les clés privées sont dans le vault
 # (vault_wg_lien_rasb_private, vault_wg_lien_fw_private).
-wg_lien_cle_publique_rasb: ""
-wg_lien_cle_publique_fw: ""
+wg_lien_cle_publique_rasb: "Mp9K1iUyEXWUgDpTJdojg2ROc4A8kqwPmVxDE5tBgHQ="
+wg_lien_cle_publique_fw: "oab6MKKnmGT+gnd6aJOJmK+6x4MA1B6lZoCGobAQlHc="
