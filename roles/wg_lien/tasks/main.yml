@@ -1,0 +1,35 @@
+---
+- name: Les clés du lien sont renseignées
+  ansible.builtin.assert:
+    that:
+      - wg_lien_cle_privee | length > 0
+      - wg_lien_pair.public_key | default('') | length == 44
+    fail_msg: >-
+      Clés du lien {{ wg_lien_interface }} manquantes : clé privée dans le vault,
+      clé publique du pair dans group_vars/all/wireguard.yml.
+    quiet: true
+  when: wg_lien_enabled | bool
+
+- name: Paquet wireguard
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+  when: wg_lien_enabled | bool
+
+- name: Configuration du lien
+  ansible.builtin.template:
+    src: wg.conf.j2
+    dest: "/etc/wireguard/{{ wg_lien_interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: wg_lien_enabled | bool
+  notify: restart wg lien
+
+- name: Service du lien
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ wg_lien_interface }}"
+    state: "{{ 'started' if wg_lien_enabled | bool else 'stopped' }}"
+    enabled: "{{ wg_lien_enabled | bool }}"
+  when: not ansible_check_mode

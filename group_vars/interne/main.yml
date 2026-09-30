@@ -1,0 +1,7 @@
+---
+# VM du réseau 10.10.0.0/24 : rasb les joint par wg1, avec l'adresse lien_admin_rasb
+compte_ansible_sources: ["{{ lien_admin_rasb }}"]
+fail2ban_ignoreip: "127.0.0.1/8 ::1 {{ lien_admin_rasb }}"
+
+# Le compte de service n'est pas dans la liste du dépôt
+check_comptes_autorises: "{{ ['root', 'ansible'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"

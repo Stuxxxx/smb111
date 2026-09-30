@@ -1,0 +1,21 @@
+---
+# Seules sources autorisées vers les ports d'administration de l'hyperviseur
+# (SSH 22, interface web et API 8006, consoles VNC/SPICE). Proxmox les ouvre
+# automatiquement à l'ensemble « management » ; sans lui, à tout le réseau local.
+#  - rasb sur le réseau local
+#  - le tunnel wg0 : rasb (Ansible, API) et les postes relayés par rasb, qui
+#    ne laisse passer que le port 8006 entre pairs
+pve_fw_management:
+  - "{{ admin_ip_lan }}"
+  - 10.99.0.0/24
+
+# Journalisation des paquets entrants rejetés (nolog, emerg … debug)
+pve_fw_log_entree: info
+
+# Filet de sécurité : le pare-feu est désactivé au bout de ce délai si
+# l'accès n'a pas été confirmé
+pve_fw_filet_minutes: 10
+
+# Copie de travail des fichiers, hors de /etc/pve : pmxcfs ne gère ni les
+# droits ni le renommage atomique qu'utilise le module template
+pve_fw_staging: /etc/smb111/pve-firewall

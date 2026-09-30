@@ -1,0 +1,18 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[Interface]
+Address = {{ wg_lien_adresse }}
+{% if wg_lien_port | int > 0 %}
+ListenPort = {{ wg_lien_port }}
+{% endif %}
+PrivateKey = {{ wg_lien_cle_privee }}
+
+# {{ wg_lien_pair.nom }}
+[Peer]
+PublicKey = {{ wg_lien_pair.public_key }}
+AllowedIPs = {{ wg_lien_pair.allowed_ips | join(', ') }}
+{% if wg_lien_pair.endpoint is defined %}
+Endpoint = {{ wg_lien_pair.endpoint }}
+{% endif %}
+{% if wg_lien_pair.keepalive is defined %}
+PersistentKeepalive = {{ wg_lien_pair.keepalive }}
+{% endif %}
