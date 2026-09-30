@@ -1,0 +1,96 @@
+---
+# Pare-feu et passerelle du réseau interne : filtrage nftables, NAT vers le
+# réseau local, DNS interne (dnsmasq, sans DHCP).
+#
+# Ordre voulu : les règles (politique drop) sont en place avant d'activer le
+# routage et avant que dnsmasq n'écoute.
+
+- name: Paquets du pare-feu
+  ansible.builtin.apt:
+    name:
+      - nftables
+      - at
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Règles nftables
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0755"
+    backup: true
+    validate: /usr/sbin/nft -c -f %s
+  register: fw_nft
+
+# En cas de perte d'accès, at restaure les règles précédentes au bout de
+# fw_filet_minutes ; le filet n'est annulé qu'après une nouvelle connexion réussie.
+- name: Appliquer les règles sous filet de sécurité
+  when:
+    - fw_nft is changed
+    - not ansible_check_mode
+  block:
+    - name: Programmer la restauration des règles précédentes
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        echo '{{ fw_restauration }}' | at now + {{ fw_filet_minutes }} minutes 2>&1
+      args:
+        executable: /bin/bash
+      vars:
+        fw_restauration: >-
+          {{ 'cp ' ~ fw_nft.backup_file ~ ' /etc/nftables.conf && nft -f /etc/nftables.conf'
+             if fw_nft.backup_file is defined else 'nft flush ruleset' }}
+      register: fw_filet
+      changed_when: true
+
+    - name: Charger les nouvelles règles
+      ansible.builtin.command: /usr/sbin/nft -f /etc/nftables.conf
+      changed_when: true
+
+    - name: Rouvrir la connexion SSH à travers les nouvelles règles
+      ansible.builtin.meta: reset_connection
+
+    - name: Le pare-feu laisse passer Ansible
+      ansible.builtin.ping:
+
+    - name: Annuler le filet de sécurité
+      ansible.builtin.command: "atrm {{ fw_filet.stdout | regex_search('job (\\d+)', '\\1') | first }}"
+      changed_when: true
+
+- name: Règles chargées au démarrage
+  ansible.builtin.systemd_service:
+    name: nftables
+    state: started
+    enabled: true
+
+- name: Routage IPv4
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-fw.conf
+    sysctl_set: true
+    reload: true
+    state: present
+
+- name: Paquet dnsmasq
+  ansible.builtin.apt:
+    name: dnsmasq
+    state: present
+
+- name: Configuration DNS
+  ansible.builtin.template:
+    src: dnsmasq.conf.j2
+    dest: /etc/dnsmasq.d/smb111.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/dnsmasq --test --conf-file=%s
+  notify: restart dnsmasq
+
+- name: dnsmasq démarré et activé au démarrage
+  ansible.builtin.systemd_service:
+    name: dnsmasq
+    state: started
+    enabled: true

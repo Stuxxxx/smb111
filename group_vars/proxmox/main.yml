@@ -8,10 +8,10 @@ pve_node: pve                 # nom du nœud, tel qu'il apparaît dans l'interfa
 pve_storage: local-lvm
 pve_template: debian-13-template
 
-# Réseaux
+# Ponts réseau (les adresses sont dans group_vars/all/reseau.yml)
 pve_bridge_interne: vmbr1
 pve_bridge_externe: vmbr0
-reseau_interne: 10.10.0
-passerelle_interne: 10.10.0.1
-fw_ip_externe: 192.168.1.70
-passerelle_externe: 192.168.1.254
+
+# Mémoire totale allouable aux VM, en Mio. Le serveur dispose d'environ
+# 15,5 Gio : on en laisse près de 3 à l'hyperviseur (pas de sur-allocation).
+pve_memoire_max_vms: 12800
