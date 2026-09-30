@@ -1,0 +1,26 @@
+---
+# Les humains ont leur compte nominatif (admins.yml) ; le compte ansible ne sert
+# qu'à l'automatisation, depuis rasb uniquement.
+
+- name: Verrouiller le mot de passe du compte d'automatisation
+  ansible.builtin.user:
+    name: "{{ compte_ansible_nom }}"
+    password_lock: true
+
+- name: Clé du compte d'automatisation, limitée à la provenance de rasb
+  ansible.posix.authorized_key:
+    user: "{{ compte_ansible_nom }}"
+    key: "{{ compte_ansible_cle }}"
+    key_options: 'from="{{ compte_ansible_sources | join(",") }}"'
+    exclusive: true
+  register: compte_ansible_cle_posee
+
+# Ansible est connecté par ce compte : on vérifie qu'une nouvelle connexion
+# passe encore, pour découvrir une erreur ici plutôt qu'au passage suivant.
+- name: Rouvrir la connexion SSH après modification de la clé
+  ansible.builtin.meta: reset_connection
+  when: compte_ansible_cle_posee is changed
+
+- name: La connexion par clé fonctionne toujours
+  ansible.builtin.ping:
+  when: compte_ansible_cle_posee is changed

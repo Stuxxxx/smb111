@@ -21,15 +21,28 @@
     vms_cibles: >-
       {{ vms | selectattr('name', 'equalto', cible) | list if cible else vms }}
 
-    pve: &pve
+    # Connexion à l'API. proxmox_nic refuse le paramètre node : il utilise
+    # pve_api seul ; les autres modules utilisent pve (pve_api + node).
+    pve_api: &pve_api
       api_host: "{{ pve_api_host }}"
       api_user: "{{ pve_api_user }}"
       api_token_id: "{{ pve_api_token_id }}"
       api_token_secret: "{{ pve_api_token_secret }}"
       validate_certs: false
+
+    pve: &pve
+      <<: *pve_api
       node: "{{ pve_node }}"
 
   tasks:
+    - name: Vérifier que la mémoire des VM tient dans le serveur
+      ansible.builtin.assert:
+        that: vms | map(attribute='memory') | sum <= pve_memoire_max_vms
+        fail_msg: >-
+          Les VM demandent {{ vms | map(attribute='memory') | sum }} Mio,
+          plus que pve_memoire_max_vms ({{ pve_memoire_max_vms }} Mio).
+        quiet: true
+
     - name: Vérifier que le template existe
       community.proxmox.proxmox_vm_info:
         <<: *pve
@@ -89,7 +102,7 @@
 
     - name: Interface externe du pare-feu
       community.proxmox.proxmox_nic:
-        <<: *pve
+        <<: *pve_api
         vmid: "{{ item.vmid }}"
         interface: net1
         bridge: "{{ pve_bridge_externe }}"
@@ -102,8 +115,9 @@
       community.proxmox.proxmox_kvm:
         <<: *pve
         vmid: "{{ item.vmid }}"
+        # Pas de cipassword : le compte ansible n'a pas de mot de passe
+        # (cloud-init le verrouille), l'accès se fait uniquement par clé.
         ciuser: ansible
-        cipassword: ""
         sshkeys: "{{ lookup('ansible.builtin.file', '~/.ssh/smb111.pub') }}"
         nameservers: "{{ '1.1.1.1' if item.name == 'fw' else passerelle_interne }}"
         ipconfig:
