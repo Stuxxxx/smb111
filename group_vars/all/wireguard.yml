@@ -20,3 +20,8 @@ wg_peers_declares:
   - name: leo-laptop
     public_key: "2f1iAYqsZRd4D4Z86X0ssWRE1mMwRY1XLNrPSZQyMQ4="
     ip: 10.99.0.6
+
+# Lien wg1 (rasb ↔ fw). Clés publiques ; les clés privées sont dans le vault
+# (vault_wg_lien_rasb_private, vault_wg_lien_fw_private).
+wg_lien_cle_publique_rasb: "Mp9K1iUyEXWUgDpTJdojg2ROc4A8kqwPmVxDE5tBgHQ="
+wg_lien_cle_publique_fw: "oab6MKKnmGT+gnd6aJOJmK+6x4MA1B6lZoCGobAQlHc="

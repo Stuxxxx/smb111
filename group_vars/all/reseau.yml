@@ -5,7 +5,15 @@ passerelle_interne: 10.10.0.1
 fw_ip_externe: 192.168.1.70
 passerelle_externe: 192.168.1.254
 
+# Hyperviseur, vu depuis le réseau local
+pve_ip_lan: 192.168.1.180
+
 # Machine d'administration (rasb), vue depuis le réseau local
 admin_ip_lan: 192.168.1.90
 # Domaine interne servi par le DNS du pare-feu
 domaine_interne: smb111.lan
+
+# Lien WireGuard d'administration wg1 : rasb ↔ fw, seul chemin vers 10.10.0.0/24
+lien_admin_fw: 10.98.0.1
+lien_admin_rasb: 10.98.0.2
+lien_admin_port: 51821

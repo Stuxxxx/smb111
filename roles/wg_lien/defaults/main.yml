@@ -1,0 +1,9 @@
+---
+# Lien WireGuard point à point entre deux machines (un seul pair).
+wg_lien_enabled: false
+wg_lien_interface: wg1
+wg_lien_adresse: ""            # ex. 10.98.0.1/30
+wg_lien_port: 0                # port d'écoute ; 0 = côté client, sans écoute
+wg_lien_cle_privee: ""
+# nom, public_key, allowed_ips (liste), endpoint et keepalive (côté client)
+wg_lien_pair: {}

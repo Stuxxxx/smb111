@@ -70,3 +70,32 @@
     name: "{{ item }}"
     state: present
   loop: "{{ common_locales }}"
+
+# LLMNR et mDNS écoutent sur toutes les interfaces et n'ont aucun usage ici
+- name: Présence de systemd-resolved
+  ansible.builtin.stat:
+    path: /run/systemd/resolve
+  register: common_resolved
+
+- name: Répertoire de configuration de systemd-resolved
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: common_resolved.stat.exists
+
+- name: Désactiver LLMNR et mDNS
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/90-smb111.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible — toute modification manuelle sera écrasée
+      [Resolve]
+      LLMNR=no
+      MulticastDNS=no
+  when: common_resolved.stat.exists
+  notify: restart systemd-resolved

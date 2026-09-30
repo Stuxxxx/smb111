@@ -1,0 +1,94 @@
+---
+# Pare-feu de l'hyperviseur, par le pare-feu intégré de Proxmox : politique
+# d'entrée drop, administration réservée à l'ensemble « management ».
+#
+# Les VM ne sont pas concernées : leur pare-feu Proxmox reste désactivé
+# (option firewall de chaque VM), le filtrage du SI est fait par fw.
+
+- name: Paquet at (filet de sécurité)
+  ansible.builtin.apt:
+    name: at
+    state: present
+
+- name: Répertoire de travail
+  ansible.builtin.file:
+    path: "{{ pve_fw_staging }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Règles du datacenter
+  ansible.builtin.template:
+    src: cluster.fw.j2
+    dest: "{{ pve_fw_staging }}/cluster.fw"
+    owner: root
+    group: root
+    mode: "0600"
+  register: pve_fw_cluster
+
+- name: Règles du nœud
+  ansible.builtin.template:
+    src: host.fw.j2
+    dest: "{{ pve_fw_staging }}/host.fw"
+    owner: root
+    group: root
+    mode: "0600"
+  register: pve_fw_host
+
+- name: Appliquer sous filet de sécurité
+  when:
+    - pve_fw_cluster is changed or pve_fw_host is changed
+    - not ansible_check_mode
+  block:
+    - name: Programmer la désactivation du pare-feu
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        echo 'pvesh set /cluster/firewall/options --enable 0'
+        | at now + {{ pve_fw_filet_minutes }} minutes 2>&1
+      args:
+        executable: /bin/bash
+      register: pve_fw_filet
+      changed_when: true
+
+    - name: Installer les règles dans /etc/pve
+      ansible.builtin.command: "cp {{ pve_fw_staging }}/{{ item.src }} {{ item.dest }}"
+      loop:
+        - { src: cluster.fw, dest: /etc/pve/firewall/cluster.fw }
+        - { src: host.fw, dest: "/etc/pve/nodes/{{ pve_node }}/host.fw" }
+      changed_when: true
+
+    - name: Recharger le pare-feu
+      ansible.builtin.command: pve-firewall restart
+      changed_when: true
+
+# reset_connection ignore toute condition : il est exécuté à chaque passage.
+- name: Rouvrir la connexion SSH à travers le pare-feu
+  ansible.builtin.meta: reset_connection
+
+- name: Vérifier l'accès puis retirer le filet
+  when:
+    - pve_fw_cluster is changed or pve_fw_host is changed
+    - not ansible_check_mode
+  block:
+    - name: SSH passe toujours
+      ansible.builtin.ping:
+
+    - name: L'API passe toujours depuis rasb
+      ansible.builtin.wait_for:
+        host: "{{ pve_api_host }}"
+        port: 8006
+        timeout: 30
+      delegate_to: localhost
+      become: false
+
+    - name: Annuler le filet de sécurité
+      ansible.builtin.command: "atrm {{ pve_fw_filet.stdout | regex_search('job (\\d+)', '\\1') | first }}"
+      changed_when: true
+
+- name: Le pare-feu est actif
+  ansible.builtin.command: pve-firewall status
+  register: pve_fw_status
+  changed_when: false
+  check_mode: false
+  failed_when: "'enabled/running' not in pve_fw_status.stdout"

@@ -12,6 +12,15 @@
     - admin
     - role: wireguard
       tags: [wireguard]
+    - role: wg_lien
+      tags: [wg1]
+
+- name: Hyperviseur
+  hosts: proxmox
+  become: true
+  roles:
+    - role: pve_firewall
+      tags: [pve_firewall]
 
 - name: Pare-feu du SI
   hosts: pare_feu
@@ -20,6 +29,14 @@
     - compte_ansible
     - role: fw
       tags: [fw]
+    - role: wg_lien
+      tags: [fw, wg1]
+
+- name: VM du réseau interne
+  hosts: interne
+  become: true
+  roles:
+    - compte_ansible
 
 - name: Gestion des administrateurs
   import_playbook: admins.yml

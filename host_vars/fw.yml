@@ -4,3 +4,13 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1 {{ admin_ip_lan }}"
 
 # Le compte de service n'est pas dans la liste du dépôt
 check_comptes_autorises: "{{ ['root', 'ansible'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"
+
+# Lien d'administration wg1 : fw écoute, rasb se connecte
+wg_lien_enabled: true
+wg_lien_adresse: "{{ lien_admin_fw }}/30"
+wg_lien_port: "{{ lien_admin_port }}"
+wg_lien_cle_privee: "{{ vault_wg_lien_fw_private | default('') }}"
+wg_lien_pair:
+  nom: rasb
+  public_key: "{{ wg_lien_cle_publique_rasb }}"
+  allowed_ips: ["{{ lien_admin_rasb }}/32"]
