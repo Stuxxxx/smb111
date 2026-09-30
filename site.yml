@@ -13,6 +13,13 @@
     - role: wireguard
       tags: [wireguard]
 
+- name: Hyperviseur
+  hosts: proxmox
+  become: true
+  roles:
+    - role: pve_firewall
+      tags: [pve_firewall]
+
 - name: Pare-feu du SI
   hosts: pare_feu
   become: true
