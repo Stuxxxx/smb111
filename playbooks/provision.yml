@@ -21,12 +21,15 @@
     vms_cibles: >-
       {{ vms | selectattr('name', 'equalto', cible) | list if cible else vms }}
 
-    pve: &pve
+    pve_api: &pve_api
       api_host: "{{ pve_api_host }}"
       api_user: "{{ pve_api_user }}"
       api_token_id: "{{ pve_api_token_id }}"
       api_token_secret: "{{ pve_api_token_secret }}"
       validate_certs: false
+
+    pve: &pve
+      <<: *pve_api
       node: "{{ pve_node }}"
 
   tasks:
@@ -89,7 +92,7 @@
 
     - name: Interface externe du pare-feu
       community.proxmox.proxmox_nic:
-        <<: *pve
+        <<: *pve_api
         vmid: "{{ item.vmid }}"
         interface: net1
         bridge: "{{ pve_bridge_externe }}"
