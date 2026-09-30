@@ -5,6 +5,12 @@ table ip wgfwd {
     type filter hook forward priority 0; policy accept;
 
     ct state established,related accept
+{% if wg_route_lan and wg_lan_interdits %}
+
+    # Le NAT vers le réseau local donnerait aux pairs l'adresse de cette machine :
+    # les machines administrées ne sont jointes qu'en rebond SSH, jamais en direct
+    iifname "{{ wg_interface }}" oifname "{{ wg_lan_iface }}" ip daddr { {{ wg_lan_interdits | join(', ') }} } drop comment "administration par rebond uniquement"
+{% endif %}
 {% for r in wg_relais %}
     iifname "{{ wg_interface }}" oifname "{{ wg_interface }}" ip daddr {{ r.vers }} tcp dport {{ r.port }} accept comment "{{ r.commentaire | default('relais') }}"
 {% endfor %}

@@ -21,6 +21,11 @@ wg_enabled: true
 wg_private_key: "{{ vault_wg_rasb_private }}"
 wg_route_lan: true
 wg_lan_iface: eth0
+# Les pairs sortent sur le réseau local avec l'adresse de rasb : sans cette
+# liste, ils joindraient pve et fw en direct, comme s'ils étaient rasb.
+wg_lan_interdits:
+  - "{{ pve_ip_lan }}"
+  - "{{ fw_ip_externe }}"
 wg_peers: "{{ wg_peers_declares }}"
 
 wg_relais:

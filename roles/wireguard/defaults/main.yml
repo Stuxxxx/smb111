@@ -7,6 +7,8 @@ wg_private_key: ""
 wg_peers: []
 wg_route_lan: false
 wg_lan_iface: eth0
+# Adresses du réseau local interdites aux pairs, même avec wg_route_lan
+wg_lan_interdits: []
 
 # Relais autorisés entre pairs du tunnel (sinon, aucun trafic pair à pair)
 wg_relais: []
