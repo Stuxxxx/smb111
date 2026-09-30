@@ -66,6 +66,7 @@
       ansible.builtin.command: "qm config {{ item.vmid }}"
       delegate_to: pve
       connection: ssh
+      become: true
       vars:
         ansible_python_interpreter: /usr/bin/python3
       register: qm_conf
@@ -78,6 +79,7 @@
       ansible.builtin.command: "qm resize {{ item.item.vmid }} scsi0 {{ item.item.disk }}G"
       delegate_to: pve
       connection: ssh
+      become: true
       vars:
         ansible_python_interpreter: /usr/bin/python3
       when: "'size=' ~ item.item.disk ~ 'G' not in item.stdout"
