@@ -1,0 +1,59 @@
+#!/usr/sbin/nft -f
+# Géré par Ansible — toute modification manuelle sera écrasée
+flush ruleset
+
+define IF_INT = "{{ fw_iface_interne }}"
+define IF_EXT = "{{ fw_iface_externe }}"
+define RESEAU_INT = {{ fw_reseau_interne }}
+define ADMIN = { {{ fw_ssh_sources | join(', ') }} }
+define INTERDITS = { {{ fw_destinations_interdites | join(', ') }} }
+
+table inet filtre {
+  chain input {
+    type filter hook input priority filter; policy drop;
+
+    ct state established,related accept
+    ct state invalid drop
+    iif "lo" accept
+
+    # Diagnostic et fonctionnement d'IPv6
+    ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
+    ip6 nexthdr icmpv6 icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+    # Administration : SSH depuis rasb uniquement
+    iifname $IF_EXT ip saddr $ADMIN tcp dport 22 accept
+
+    # DNS pour les VM internes
+    iifname $IF_INT ip saddr $RESEAU_INT meta l4proto { tcp, udp } th dport 53 accept
+{% if fw_log_rejets %}
+
+    limit rate {{ fw_log_debit }} log prefix "fw-input-rejet: " level info
+{% endif %}
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+
+    ct state established,related accept
+    ct state invalid drop
+
+    # Les VM sortent vers Internet, jamais vers le réseau local
+    iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT ip daddr $INTERDITS drop
+    iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT accept
+{% if fw_log_rejets %}
+
+    limit rate {{ fw_log_debit }} log prefix "fw-forward-rejet: " level info
+{% endif %}
+  }
+
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}
+
+table ip nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname $IF_EXT ip saddr $RESEAU_INT masquerade
+  }
+}
