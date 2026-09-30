@@ -1,0 +1,26 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# DNS seul, pour le réseau interne : aucune plage DHCP n'est déclarée.
+listen-address={{ passerelle_interne }}
+bind-interfaces
+no-dhcp-interface={{ fw_iface_interne }}
+
+# Résolveurs amont, sans lire /etc/resolv.conf
+no-resolv
+{% for s in fw_dns_amont %}
+server={{ s }}
+{% endfor %}
+
+# Ne jamais transmettre en amont les noms courts ni les adresses privées
+domain-needed
+bogus-priv
+local=/{{ fw_dns_domaine }}/
+domain={{ fw_dns_domaine }}
+
+{% for nom, ip in fw_dns_hotes %}
+host-record={{ nom }}.{{ fw_dns_domaine }},{{ nom }},{{ ip }}
+{% endfor %}
+
+cache-size=1000
+{% if fw_dns_log_requetes %}
+log-queries
+{% endif %}

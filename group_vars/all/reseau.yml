@@ -1,0 +1,11 @@
+---
+# Adressage du SI, partagé par l'hyperviseur (provision.yml) et le pare-feu (rôle fw).
+reseau_interne: 10.10.0
+passerelle_interne: 10.10.0.1
+fw_ip_externe: 192.168.1.70
+passerelle_externe: 192.168.1.254
+
+# Machine d'administration (rasb), vue depuis le réseau local
+admin_ip_lan: 192.168.1.90
+# Domaine interne servi par le DNS du pare-feu
+domaine_interne: smb111.lan

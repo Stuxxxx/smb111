@@ -1,0 +1,28 @@
+---
+# Interfaces : net0 (vmbr1, réseau interne) et net1 (vmbr0, réseau local)
+fw_iface_interne: eth0
+fw_iface_externe: eth1
+fw_reseau_interne: "{{ reseau_interne }}.0/24"
+
+# SSH accepté sur l'interface externe depuis ces seules adresses
+fw_ssh_sources: ["{{ admin_ip_lan }}"]
+
+# Destinations interdites aux VM : le réseau local (box, hyperviseur, postes).
+# Seul Internet leur est accessible, via la NAT.
+fw_destinations_interdites: ["192.168.1.0/24"]
+
+# Journalisation des paquets rejetés (préfixe visible dans journalctl -k)
+fw_log_rejets: true
+fw_log_debit: "10/minute"
+
+# Filet de sécurité : restauration automatique des règles précédentes si la
+# connexion SSH est perdue après application.
+fw_filet_minutes: 10
+
+# DNS (dnsmasq, sans DHCP)
+fw_dns_amont: ["1.1.1.1", "9.9.9.9"]
+fw_dns_domaine: "{{ domaine_interne }}"
+# Un enregistrement par VM déclarée dans vms.yml
+fw_dns_hotes: "{{ vms | map(attribute='name') | zip(vms | map(attribute='ip')) | list }}"
+# Journal des requêtes DNS : désactivé par défaut (minimisation des données)
+fw_dns_log_requetes: false
