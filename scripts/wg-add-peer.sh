@@ -18,7 +18,7 @@ DERNIERE_IP=50
 # Informations publiques du serveur, affichées dans la configuration client.
 SERVEUR_PUBKEY="$(sudo wg show wg0 public-key 2>/dev/null || echo '<clé publique de rasb>')"
 SERVEUR_ENDPOINT="${WG_ENDPOINT:-<ip-publique>:51820}"
-SERVEUR_ALLOWED="10.99.0.0/24, 192.168.1.0/24"
+SERVEUR_ALLOWED="10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24"
 
 err() { printf '\033[31m%s\033[0m\n' "$*" >&2; exit 1; }
 ok()  { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -78,6 +78,7 @@ cat > "$conf" <<EOF
 [Interface]
 PrivateKey = <clé privée générée par TON client, à ne pas partager>
 Address = $ip/32
+DNS = 10.10.0.1
 
 [Peer]
 PublicKey = $SERVEUR_PUBKEY

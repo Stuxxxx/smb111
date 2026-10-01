@@ -11,7 +11,7 @@ la connexion à Keycloak via OpenID Connect au lieu de gérer ses propres mots d
 | Ports | `443` (HTTPS), `9000` (santé et métriques, local à la VM) |
 | Service | `keycloak.service`, compte système `keycloak`, installé dans `/opt/keycloak` |
 | Secrets (vault) | `vault_keycloak_db_password`, `vault_keycloak_admin_password` |
-| Chemin d'administration | `rasb` → `wg1` → `fw` → `idp` (SSH uniquement) |
+| Chemin d'administration | SSH : rebond `rasb` → `wg1` → `fw` → `idp` ; console web : 443 depuis `wg0` |
 
 Les commandes sont à lancer **sur `rasb`** (bash), sauf celles marquées **PC (PowerShell)**.
 
@@ -127,31 +127,43 @@ ansible idp -b -m ansible.builtin.uri -a 'url=https://localhost:9000/health/read
 ansible-playbook playbooks/check.yml --limit idp
 ```
 
-Le port 443 n'est pas ouvert de `rasb` vers les VM (`fw` n'y laisse passer que SSH et l'API
-Kubernetes) : la vérification se fait donc depuis la VM elle-même.
+`rasb` lui-même n'atteint pas le port 443 des VM (`fw` ne lui ouvre que SSH et l'API
+Kubernetes ; le 443 n'est ouvert qu'aux postes de `wg0`) : la vérification se fait donc depuis la VM elle-même.
 
 ---
 
 ## 7. Accéder à la console d'administration
 
-On passe par SSH : `rasb`, puis `idp`, et le port 443 de `idp` est ramené sur ton PC.
+Avec WireGuard (`wg0`) actif, la console s'ouvre directement dans le navigateur. Le flux passe
+par `rasb` puis `wg1` jusqu'à `fw`, qui ne laisse passer vers `idp` que le port 443 depuis les
+postes de `wg0` (liste `services_web_admin` dans `group_vars/all/reseau.yml`). SSH reste en rebond.
 
-1. **PC (PowerShell lancé en administrateur)** — faire pointer le nom vers ton PC :
+**Une seule fois sur le PC**, dans la configuration WireGuard du client :
 
-   ```powershell
-   Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "127.0.0.1   idp.smb111.lan"
-   ```
+```
+[Interface]
+...
+DNS = 10.10.0.1
 
-2. **PC (PowerShell normal)**, WireGuard actif — ouvrir le tunnel et laisser la fenêtre ouverte :
+[Peer]
+...
+AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
+```
 
-   ```powershell
-   ssh -N -L 443:localhost:443 -J Orfeo@10.99.0.1 Orfeo@10.10.0.5
-   ```
+`DNS` fait résoudre les noms par le DNS du SI (dnsmasq sur `fw`) tant que le tunnel est actif :
+`idp.smb111.lan` et les futurs services fonctionnent sans fichier hosts, Internet reste résolu
+normalement, et `mabbox.bytel.fr` est transmis à la box. Retirer toute ligne `idp.smb111.lan` du fichier
+hosts : elle passerait avant le DNS.
 
-3. Ouvrir `https://idp.smb111.lan/admin/`, accepter l'avertissement (certificat autosigné),
-   se connecter avec `admin-temp` et le mot de passe du vault.
+**Ensuite :** ouvrir `https://idp.smb111.lan/admin/` et accepter l'avertissement (certificat
+autosigné, en attendant la PKI interne). Le nom doit rester `idp.smb111.lan` : Keycloak redirige
+vers l'URL exacte.
 
-Le port local doit être **443** : Keycloak redirige vers l'URL exacte.
+**Sans WireGuard** (secours) : tunnel SSH par `rasb`, avec la ligne `127.0.0.1   idp.smb111.lan`
+dans le fichier hosts (à retirer ensuite), puis `ssh -N -L 443:localhost:443 -J Orfeo@192.168.1.90 Orfeo@10.10.0.5`
+(ou `ssh -N idp-console`), fenêtre laissée ouverte.
+
+Se connecter avec `admin-temp` et le mot de passe du vault.
 
 ---
 
