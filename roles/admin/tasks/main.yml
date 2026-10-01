@@ -109,11 +109,23 @@
     mode: "0640"
   no_log: true
   when: vault_smb111_private_key is defined
-  register: admin_cle_privee
+
+# Calculée depuis le vault et non depuis le fichier : root, propriétaire du
+# fichier, se le verrait refuser par ssh-keygen (droits 0640 trop ouverts).
+- name: Calculer la partie publique de la clé du projet
+  ansible.builtin.command: ssh-keygen -y -f /dev/stdin
+  args:
+    stdin: "{{ vault_smb111_private_key }}"
+  register: admin_cle_publique
+  changed_when: false
+  no_log: true
+  when: vault_smb111_private_key is defined
 
 - name: Partie publique de la clé du projet
-  ansible.builtin.shell: >-
-    ssh-keygen -y -f {{ admin_cle_projet }} > {{ admin_cle_projet }}.pub
-    && chmod 0644 {{ admin_cle_projet }}.pub
-  when: admin_cle_privee is changed
-  changed_when: true
+  ansible.builtin.copy:
+    content: "{{ admin_cle_publique.stdout }}\n"
+    dest: "{{ admin_cle_projet }}.pub"
+    owner: root
+    group: root
+    mode: "0644"
+  when: vault_smb111_private_key is defined
