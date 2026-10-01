@@ -31,18 +31,17 @@ VM internes (enregistrement déduit de `vms.yml`), il n'y a donc rien à créer.
 
 | Vérification | Commande | Attendu |
 |---|---|---|
-| Clé du projet dans ton compte | `ls ~/.ssh/smb111 ~/.ssh/smb111.pub` | les deux fichiers |
+| Clé du projet (partagée, groupe `admins`) | `ls -l /etc/ansible/smb111 /etc/ansible/smb111.pub` | les deux fichiers, `root admins` |
 | Lien `wg1` vers `fw` actif | `sudo wg show wg1 latest-handshakes` | un horodatage récent |
 | `fw` joignable par le lien | `ping -c2 10.10.0.1` | réponses |
 | `fw` donne Internet et DNS aux VM | — | sinon Keycloak ne peut pas être téléchargé |
 | Collection PostgreSQL | `ansible-galaxy collection list community.postgresql` | une version listée |
 
-Si la clé manque :
+Si la clé manque, le rôle `admin` la pose depuis le vault (aucune copie dans les comptes
+personnels) :
 
 ```bash
-mkdir -p ~/.ssh && chmod 700 ~/.ssh
-ansible rasb -m ansible.builtin.copy -a '{"content": "{{ vault_smb111_private_key }}", "dest": "'"$HOME"'/.ssh/smb111", "mode": "0600"}'
-ssh-keygen -y -f ~/.ssh/smb111 > ~/.ssh/smb111.pub
+ansible-playbook site.yml --limit rasb
 ```
 
 Si la collection manque :

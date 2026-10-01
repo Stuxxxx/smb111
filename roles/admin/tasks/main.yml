@@ -97,12 +97,23 @@
     enabled: "{{ admin_check_enabled }}"
     daemon_reload: true
 
-- name: Clé SSH du projet
+# Clé des machines, partagée par les administrateurs comme le mot de passe du
+# vault (qui la contient déjà) : chacun lance les playbooks sous son propre
+# compte. Appartenant à root, ssh l'accepte malgré la lecture par le groupe.
+- name: Clé SSH du projet, lisible par le groupe admins
   ansible.builtin.copy:
     content: "{{ vault_smb111_private_key }}"
-    dest: "/home/{{ admin_pull_user }}/.ssh/smb111"
-    owner: "{{ admin_pull_user }}"
-    group: "{{ admin_pull_user }}"
-    mode: "0600"
+    dest: "{{ admin_cle_projet }}"
+    owner: root
+    group: admins
+    mode: "0640"
   no_log: true
   when: vault_smb111_private_key is defined
+  register: admin_cle_privee
+
+- name: Partie publique de la clé du projet
+  ansible.builtin.shell: >-
+    ssh-keygen -y -f {{ admin_cle_projet }} > {{ admin_cle_projet }}.pub
+    && chmod 0644 {{ admin_cle_projet }}.pub
+  when: admin_cle_privee is changed
+  changed_when: true
