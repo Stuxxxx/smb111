@@ -31,6 +31,9 @@ table inet filtre {
     iifname $IF_LIEN ip saddr $ADMIN_LIEN tcp dport 22 accept
     iifname $IF_LIEN ip saddr $ADMIN_LIEN meta l4proto { tcp, udp } th dport 53 accept
 
+    # DNS du SI pour les postes de wg0 (relayés par rasb) : résolution de *.{{ fw_dns_domaine }}
+    iifname $IF_LIEN ip saddr $POSTES ip daddr {{ passerelle_interne }} meta l4proto { tcp, udp } th dport 53 accept
+
     # DNS pour les VM internes
     iifname $IF_INT ip saddr $RESEAU_INT meta l4proto { tcp, udp } th dport 53 accept
 

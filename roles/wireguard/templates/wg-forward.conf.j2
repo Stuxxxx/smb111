@@ -17,6 +17,9 @@ table ip wgfwd {
 {% for s in wg_services_lien %}
     iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
 {% endfor %}
+{% if wg_dns_lien %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" ip daddr {{ wg_dns_lien }} meta l4proto { tcp, udp } th dport 53 accept comment "DNS du SI"
+{% endif %}
     iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" drop
 {% endif %}
 
