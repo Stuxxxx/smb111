@@ -167,6 +167,20 @@
                     | map('community.general.dict_kv', 'name')
                     | map('combine', {'state': 'absent'}) | list) }}
 
+        # Mot de passe temporaire posé par un admin (-e mdp=...)
+        - name: Mot de passe temporaire pour {{ kc_nom }}
+          when:
+            - kc_etat == 'present'
+            - kc_mdp | length > 0
+          middleware_automation.keycloak.keycloak_user:
+            realm: "{{ kc_realm }}"
+            username: "{{ kc_nom }}"
+            credentials:
+              - type: password
+                value: "{{ kc_mdp }}"
+                temporary: true          # à changer à la première connexion
+          no_log: true
+
         # Invitation : automatique pour un nouveau compte, ou -e renvoyer=true
         - name: Invitation par e-mail à {{ kc_nom }}
           when:

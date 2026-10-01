@@ -53,6 +53,9 @@ kc_echecs_avant_blocage: 5
 # Sans « nom », le rôle se contente de maintenir le realm, les groupes et le SMTP.
 kc_nom: "{{ nom | default('') }}"
 kc_email: "{{ email | default('') }}"
+# Mot de passe temporaire posé par un admin : -e "nom=X mdp=Provisoire1!"
+# (la personne devra le changer à la première connexion)
+kc_mdp: "{{ mdp | default('') }}"
 kc_groupes_demandes: "{{ (groupes | default('utilisateurs')).split(',') | map('trim') | select | list }}"
 kc_actif: "{{ actif | default(true) | bool }}"
 kc_etat: "{{ etat | default('present') }}"
