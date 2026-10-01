@@ -96,6 +96,25 @@
         roles:
           - name: realm-admin
 
+    # --- Diagnostic : lister tous les comptes (-e diag=true) -----------------
+    - name: Diagnostic des comptes du realm
+      when: diag | default(false) | bool
+      block:
+        - name: Lire les comptes
+          middleware_automation.keycloak.keycloak_realm_users_info:
+            realm: "{{ kc_realm }}"
+          register: kc_diag
+
+        - name: Afficher chaque compte
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.username }} | email={{ item.email | default('-') }} |
+              enabled={{ item.enabled | default('-') }} |
+              emailVerified={{ item.emailVerified | default('-') }} | id={{ item.id }}
+          loop: "{{ kc_diag.users | default([]) }}"
+          loop_control:
+            label: "{{ item.username }}"
+
     # --- Gestion d'un compte, demandée en ligne de commande ------------------
     # Une commande décrit l'état voulu du compte. Pour créer ou modifier
     # (groupes, actif), on redonne l'email. L'invitation part automatiquement
