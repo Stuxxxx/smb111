@@ -1,0 +1,49 @@
+---
+# API d'administration, appelée depuis idp elle-même (fw ne laisse pas passer
+# le port 443 depuis rasb)
+kc_url: "https://localhost"
+
+# Realm du projet : utilisateurs et services
+kc_realm: smb111
+kc_realm_nom_affiche: "SMB111"
+
+# Compte d'automatisation (realm master), créé au premier passage
+kc_compte_ansible: ansible
+kc_compte_ansible_mdp: "{{ vault_keycloak_ansible_password }}"
+
+# Compte de démarrage du rôle keycloak : sert une seule fois, à créer le
+# compte d'automatisation, puis il est supprimé
+kc_compte_demarrage: admin-temp
+kc_compte_demarrage_mdp: "{{ vault_keycloak_admin_password }}"
+kc_supprimer_demarrage: true
+
+# Adresses e-mail des comptes, rangées dans le vault (dépôt public) :
+#   vault_keycloak_emails: { nom: adresse, ... }
+kc_emails: "{{ vault_keycloak_emails | default({}) }}"
+
+# Invitation envoyée aux nouveaux comptes : choisir son mot de passe et
+# activer la double authentification. Lien valable kc_invitation_duree secondes.
+kc_actions_invitation:
+  - UPDATE_PASSWORD
+  - CONFIGURE_TOTP
+kc_invitation_duree: 172800        # 48 h
+
+# Renvoyer l'invitation à des comptes existants : -e renvoyer=nom1,nom2
+kc_renvoyer: "{{ (renvoyer | default('')).split(',') | map('trim') | select | list }}"
+
+# Groupes du realm. Les membres de kc_groupe_admin administrent le realm
+# depuis la console (rôle realm-admin).
+kc_groupes:
+  - admins
+  - utilisateurs
+kc_groupe_admin: admins
+
+# Sécurité du realm
+kc_politique_mdp: "length(12) and notUsername"
+kc_echecs_avant_blocage: 5
+
+# Liste des comptes : host_vars/idp/utilisateurs.yml
+keycloak_utilisateurs: []
+kc_comptes_presents: >-
+  {{ (keycloak_utilisateurs | rejectattr('state', 'defined') | list)
+     + (keycloak_utilisateurs | selectattr('state', 'defined') | selectattr('state', 'equalto', 'present') | list) }}

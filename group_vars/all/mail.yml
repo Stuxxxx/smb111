@@ -1,0 +1,16 @@
+---
+# Messagerie sortante. fw reçoit les mails des VM internes (port 25) et les
+# confie à un service d'envoi reconnu : un serveur maison ne peut pas livrer
+# Gmail ou Outlook directement (IP résidentielle, port 25 bloqué, pas de domaine).
+mail_relais_interne: "{{ passerelle_interne }}"
+
+# Service d'envoi (ici Gmail, avec un mot de passe d'application).
+# Le compte et son mot de passe sont dans le vault.
+mail_service_hote: smtp.gmail.com
+mail_service_port: 587
+mail_service_utilisateur: "{{ vault_mail_service_utilisateur }}"
+mail_service_mdp: "{{ vault_mail_service_mdp }}"
+
+# Expéditeur affiché. Gmail impose l'adresse du compte d'envoi.
+mail_expediteur: "{{ vault_mail_service_utilisateur }}"
+mail_expediteur_nom: "SMB111"

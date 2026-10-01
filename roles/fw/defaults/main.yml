@@ -38,3 +38,6 @@ fw_dns_hotes: "{{ vms | map(attribute='name') | zip(vms | map(attribute='ip')) |
 fw_dns_transferts: []
 # Journal des requêtes DNS : désactivé par défaut (minimisation des données)
 fw_dns_log_requetes: false
+
+# Relais de messagerie (rôle relais_mail) : port 25 ouvert aux VM internes
+fw_relais_mail: false

@@ -1,0 +1,49 @@
+---
+# Relais de messagerie : Postfix sans boîte aux lettres, qui transmet tout au
+# service d'envoi (mail_service_hote) avec authentification et chiffrement.
+
+- name: Installation de Postfix sans assistant de configuration
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: No configuration
+    vtype: select
+
+- name: Paquets du relais
+  ansible.builtin.apt:
+    name:
+      - postfix
+      - libsasl2-modules      # authentification auprès du service d'envoi
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Configuration de Postfix
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart postfix
+
+- name: Identifiants du service d'envoi
+  ansible.builtin.copy:
+    content: "[{{ mail_service_hote }}]:{{ mail_service_port }} {{ mail_service_utilisateur }}:{{ mail_service_mdp }}\n"
+    dest: /etc/postfix/sasl_passwd
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: restart postfix
+
+- name: Configuration valide
+  ansible.builtin.command: postfix check
+  changed_when: false
+
+- name: Postfix démarré et activé au démarrage
+  ansible.builtin.systemd_service:
+    name: postfix
+    state: started
+    enabled: true
