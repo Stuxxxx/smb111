@@ -21,6 +21,7 @@ manifests Kubernetes, documentation et schémas.
 | [`installation-admin.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | état technique de la machine d'administration |
 | [`docs/procedure-keycloak.md`](docs/procedure-keycloak.md) | installation de la VM `idp` (Keycloak, SSO) |
 | [`docs/utilisation-idp.md`](docs/utilisation-idp.md) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
+| [`docs/reveil-pve.md`](docs/reveil-pve.md) | démarrer l'hyperviseur à distance (Wake-on-LAN) |
 | [`docs/relais-mail.md`](docs/relais-mail.md) | relais de messagerie sur `fw` : envoi des e-mails des VM |
 
 ---
