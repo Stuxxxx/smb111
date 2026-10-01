@@ -19,6 +19,8 @@ manifests Kubernetes, documentation et schémas.
 | [`guide-travail.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | la suite : configuration sur `rasb`, commandes du quotidien |
 | [`gestion-des-droits.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | modèle de droits complet, procédures de révocation |
 | [`installation-admin.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | état technique de la machine d'administration |
+| [`docs/procedure-keycloak.md`](docs/procedure-keycloak.md) | installation de la VM `idp` (Keycloak, SSO) |
+| [`docs/utilisation-idp.md`](docs/utilisation-idp.md) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
 
 ---
 

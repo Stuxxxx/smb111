@@ -1,0 +1,34 @@
+---
+# Version installée : vérifier la dernière sur
+# https://github.com/keycloak/keycloak/releases
+keycloak_version: "26.4.0"
+keycloak_java_package: openjdk-21-jre-headless
+
+# URL publique, telle que la verront les navigateurs et les services.
+# Elle est inscrite dans chaque jeton (champ « iss ») : la changer plus tard
+# oblige à reconfigurer tous les services branchés sur le SSO.
+keycloak_hostname: "https://idp.{{ domaine_interne }}"
+keycloak_https_port: 443
+
+keycloak_user: keycloak
+keycloak_install_dir: /opt
+keycloak_home: /opt/keycloak          # lien vers la version active
+keycloak_conf_dir: /etc/keycloak
+
+# Mémoire de la JVM : la VM n'a que 1,5 Gio, partagés avec PostgreSQL et le système
+keycloak_java_heap: "-XX:MaxRAMPercentage=40 -XX:InitialRAMPercentage=20"
+
+# Base de données locale
+keycloak_db_name: keycloak
+keycloak_db_user: keycloak
+keycloak_db_password: "{{ vault_keycloak_db_password }}"
+
+# Administrateur temporaire, créé au premier démarrage seulement
+keycloak_admin_user: admin-temp
+keycloak_admin_password: "{{ vault_keycloak_admin_password }}"
+
+# Certificat TLS : autosigné tant que la PKI du projet n'existe pas.
+# Passer à false et déposer tls.crt / tls.key pour utiliser un vrai certificat.
+keycloak_cert_autosigne: true
+keycloak_cert_file: "{{ keycloak_conf_dir }}/tls.crt"
+keycloak_key_file: "{{ keycloak_conf_dir }}/tls.key"

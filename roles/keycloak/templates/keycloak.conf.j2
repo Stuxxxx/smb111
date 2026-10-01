@@ -1,0 +1,18 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+
+# Base de données
+db=postgres
+db-url=jdbc:postgresql://localhost:5432/{{ keycloak_db_name }}
+db-username={{ keycloak_db_user }}
+db-password={{ keycloak_db_password }}
+
+# Adresse publique et TLS
+hostname={{ keycloak_hostname }}
+https-port={{ keycloak_https_port }}
+https-certificate-file={{ keycloak_cert_file }}
+https-certificate-key-file={{ keycloak_key_file }}
+http-enabled=false
+
+# Interface de gestion (port 9000) : état de santé et métriques
+health-enabled=true
+metrics-enabled=true

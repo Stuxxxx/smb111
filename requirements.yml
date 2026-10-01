@@ -4,3 +4,4 @@ collections:
   - name: community.crypto
   - name: kubernetes.core
   - name: community.proxmox
+  - name: community.postgresql
