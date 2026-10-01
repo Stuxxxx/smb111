@@ -1,23 +1,56 @@
-# Utilisation de la VM `idp` (Keycloak)
+# Keycloak (VM `idp`) — mode d'emploi
 
-Guide du quotidien. L'installation est décrite dans [`procedure-keycloak.md`](procedure-keycloak.md).
+## C'est quoi ?
 
-| Élément | Valeur |
-|---|---|
-| VM | `idp`, vmid 120, `10.10.0.5`, réseau interne |
-| Service | Keycloak (SSO), base PostgreSQL locale |
-| URL | `https://idp.smb111.lan` |
-| Console d'administration | `https://idp.smb111.lan/admin/` |
-| Page de compte des utilisateurs | `https://idp.smb111.lan/realms/smb111/account` |
+Keycloak, c'est le **compte unique du projet** : un « Se connecter avec SMB111 », comme
+« Se connecter avec Google ». Chaque personne a un seul identifiant et un seul mot de passe
+pour tous les services hébergés.
+
+Il tourne sur la VM `idp`, à l'adresse `https://idp.smb111.lan`.
 
 ---
 
-## 1. Se connecter à la VM
+## Ce que tu fais le plus souvent
 
-La VM n'est joignable que depuis `rasb` (`fw` n'accepte SSH que de lui). Depuis son PC, on
-rebondit donc par `rasb`, WireGuard actif.
+| Je veux… | Je fais… |
+|---|---|
+| Ajouter, bloquer ou retirer quelqu'un | une commande `ansible-playbook` (section 3) |
+| Gérer mon compte (mot de passe, double authentification) | `https://idp.smb111.lan/realms/smb111/account` |
+| Gérer les comptes à la souris (groupe `admins`) | `https://idp.smb111.lan/admin/smb111/console/` |
+| Entrer dans la VM | `ssh idp` (section 2) |
 
-**Configuration SSH, une seule fois** — fichier `%USERPROFILE%\.ssh\config` (sans extension) :
+---
+
+## 1. Ouvrir les pages web
+
+Il suffit que **WireGuard soit actif** sur ton PC. Une seule fois, ajoute ces deux réglages
+dans la configuration de ton client WireGuard (*Modifier* le tunnel) :
+
+```
+[Interface]
+...
+DNS = 10.10.0.1
+
+[Peer]
+...
+AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
+```
+
+- `DNS` : ton PC trouve les noms en `.smb111.lan` (Internet continue de fonctionner).
+- `AllowedIPs` : ton PC sait que le réseau des VM passe par le tunnel.
+
+Ensuite, ouvre l'adresse dans ton navigateur et accepte l'avertissement de certificat
+(c'est attendu : le certificat n'est pas encore officiel).
+
+Si tu avais ajouté `idp.smb111.lan` dans ton fichier `hosts`, retire cette ligne : elle
+passerait avant le DNS.
+
+---
+
+## 2. Entrer dans la VM (SSH)
+
+La VM n'accepte SSH qu'en passant par `rasb`. Une seule fois, dans
+`%USERPROFILE%\.ssh\config` (fichier **sans extension**) :
 
 ```powershell
 notepad "$env:USERPROFILE\.ssh\config."
@@ -32,149 +65,113 @@ Host idp
     HostName 10.10.0.5
     User <ton_nom>
     ProxyJump rasb
-
-Host idp-console
-    HostName 10.10.0.5
-    User <ton_nom>
-    ProxyJump rasb
-    LocalForward 443 localhost:443
 ```
 
-Le point final de `config.` empêche le Bloc-notes d'ajouter `.txt` : SSH ignorerait le fichier.
-
-Ensuite :
-
-```powershell
-ssh idp
-```
-
-Compte nominatif, sans mot de passe, `sudo` sans mot de passe : les mêmes règles que sur les
-autres machines (voir le README).
+Le point à la fin de `config.` empêche le Bloc-notes d'ajouter `.txt`. Ensuite : `ssh idp`.
 
 ---
 
-## 2. Vérifier que tout fonctionne
+## 3. Gérer les comptes
 
-Sur `idp` :
+### La règle
+
+Les comptes se gèrent **en ligne de commande**, depuis `rasb` : une commande par action,
+rien à éditer (ni fichier, ni vault). Les comptes vivent dans Keycloak, pas dans le dépôt —
+pense donc à la sauvegarde (fin de section 4).
+
+**Ajouter quelqu'un** (l'email n'est demandé qu'ici, il n'est stocké nulle part dans le dépôt) :
 
 ```bash
-systemctl is-active keycloak postgresql                              # active / active
-curl -sk https://localhost:9000/health/ready                          # "status": "UP"
-curl -sk -o /dev/null -w '%{http_code}\n' https://localhost/realms/master   # 200
+ansible-playbook site.yml --limit idp --tags comptes \
+  -e "nom=alice email=alice@exemple.org groupes=utilisateurs"
 ```
 
-Depuis `rasb`, sans se connecter à la VM :
-
-```bash
-ansible idp -a 'systemctl is-active keycloak postgresql'
-ansible-playbook playbooks/check.yml --limit idp
-```
-
----
-
-## 3. Ouvrir la console d'administration
-
-Avec WireGuard (`wg0`) actif, la console s'ouvre directement dans le navigateur. Le flux passe
-par `rasb` puis `wg1` jusqu'à `fw`, qui ne laisse passer vers `idp` que le port 443 depuis les
-postes de `wg0` (liste `services_web_admin` dans `group_vars/all/reseau.yml`). SSH reste en rebond.
-
-**Une seule fois sur le PC**, dans la configuration WireGuard du client :
-
-```
-[Interface]
-...
-DNS = 10.10.0.1
-
-[Peer]
-...
-AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
-```
-
-`DNS` fait résoudre les noms par le DNS du SI (dnsmasq sur `fw`) tant que le tunnel est actif :
-`idp.smb111.lan` et les futurs services fonctionnent sans fichier hosts, Internet reste résolu
-normalement, et `mabbox.bytel.fr` est transmis à la box. Retirer toute ligne `idp.smb111.lan` du fichier
-hosts : elle passerait avant le DNS.
-
-**Ensuite :** ouvrir `https://idp.smb111.lan/admin/` et accepter l'avertissement (certificat
-autosigné, en attendant la PKI interne). Le nom doit rester `idp.smb111.lan` : Keycloak redirige
-vers l'URL exacte.
-
-**Sans WireGuard** (secours) : tunnel SSH par `rasb`, avec la ligne `127.0.0.1   idp.smb111.lan`
-dans le fichier hosts (à retirer ensuite), puis `ssh -N -L 443:localhost:443 -J <ton_nom>@192.168.1.90 <ton_nom>@10.10.0.5`
-(ou `ssh -N idp-console`), fenêtre laissée ouverte.
-
----
-
-## 4. Les utilisateurs
-
-Deux sortes de comptes, à ne pas confondre :
-
-| | Comptes Linux de la VM | Utilisateurs Keycloak |
+| Paramètre | Rôle | Défaut |
 |---|---|---|
-| Servent à | administrer la VM en SSH | se connecter aux services par le SSO |
-| Définis | dans le dépôt (`group_vars/all/admins.yml`, `keys/`) | dans la console Keycloak |
-| Stockés | sur la machine, réappliqués par Ansible | dans la base PostgreSQL de `idp` |
-| Mot de passe | aucun (clé SSH uniquement) | oui, choisi par chacun |
-| Modifier | Pull Request sur le dépôt | console d'administration |
+| `nom` | identifiant de connexion | obligatoire |
+| `email` | où la personne reçoit son invitation | obligatoire à la création |
+| `groupes` | `admins` et/ou `utilisateurs`, séparés par des virgules | `utilisateurs` |
+| `actif` | `false` = compte bloqué mais conservé | `true` |
+| `etat` | `absent` = compte supprimé | `present` |
 
-### Realms
+**Mettre dans le groupe `admins`** (peut gérer les comptes à la console) :
 
-- `master` : réservé à l'administration de Keycloak. N'y créer que des comptes d'administrateur.
-- `smb111` : les utilisateurs et les services du projet.
+```bash
+ansible-playbook site.yml --limit idp --tags comptes \
+  -e "nom=bob email=bob@exemple.org groupes=admins"
+```
 
-### Créer un utilisateur
+**Modifier** un compte (groupes, blocage) = relancer avec son **état voulu complet**,
+email compris. Bloquer sans supprimer, puis réactiver :
 
-Realm `smb111` → *Users* → *Add user* : identifiant, e-mail, prénom, nom → *Create*.
-Onglet *Groups* → *Join group* (`admins` ou `utilisateurs`).
-Onglet *Credentials* → *Set password*, **Temporary activé** : la personne choisira le sien à
-la première connexion.
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice email=alice@exemple.org groupes=utilisateurs actif=false"
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice email=alice@exemple.org groupes=utilisateurs actif=true"
+```
 
-### Changer un mot de passe
+**Supprimer** :
 
-- **Par un administrateur** : *Users* → l'utilisateur → *Credentials* → *Reset password*,
-  Temporary activé.
-- **Par l'utilisateur lui-même** : `https://idp.smb111.lan/realms/smb111/account` → *Signing in*.
-- **Un utilisateur bloqué** (trop d'essais) : *Users* → l'utilisateur → bascule *Enabled*, ou
-  *Brute force* → *Unlock*.
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice etat=absent"
+```
 
-### Retirer un utilisateur
+> Un run **sans** `-e nom=...` ne touche à aucun compte : il se contente de maintenir le
+> realm, les groupes et le SMTP.
 
-Désactiver plutôt que supprimer (*Enabled* sur off) : l'historique reste consultable.
-Supprimer seulement quand le départ est définitif.
+**Réinitialiser un mot de passe** (temporaire, à changer à la première connexion) :
 
-### L'administrateur `admin-temp`
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice mdp=Temporaire2026!"
+```
 
-Créé au premier démarrage avec le mot de passe du vault (`vault_keycloak_admin_password`), qui
-**n'est plus relu ensuite** : modifier le vault ne change rien. Il doit être remplacé par des
-comptes nominatifs (realm `master`, rôle `admin`), puis supprimé.
+**Lister les comptes existants** (identifiant, email, état) :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "diag=true"
+```
+
+### Ce que reçoit un nouveau compte
+
+1. Un **e-mail d'invitation** (lien valable 48 h).
+2. En cliquant, la personne **choisit son mot de passe** (12 caractères minimum) et **active
+   la double authentification** (application type Google Authenticator, FreeOTP ou Aegis).
+3. Personne d'autre ne connaît jamais son mot de passe.
+
+**Lien expiré ou e-mail perdu** (renvoyer l'invitation) :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice renvoyer=true"
+```
+
+**Mot de passe oublié** : la personne clique sur « Mot de passe oublié ? » sur la page de
+connexion et reçoit un lien par e-mail.
+
+**Compte bloqué après 5 essais ratés** : il se débloque seul après quelques minutes, ou
+console → *Users* → la personne → *Unlock*.
+
+### Les groupes
+
+- `utilisateurs` : accès aux services.
+- `admins` : en plus, gère les comptes dans la console.
 
 ---
 
-## 5. Exploitation
+## 4. En cas de problème
 
-| Besoin | Commande (depuis `rasb`) |
+| Problème | Solution |
 |---|---|
-| Journaux | `ansible idp -b -a 'journalctl -u keycloak -n 100 --no-pager'` |
-| Redémarrer Keycloak | `ansible idp -b -a 'systemctl restart keycloak'` |
-| Réappliquer la configuration | `ansible-playbook site.yml --limit idp --tags keycloak` |
-| Sauvegarder la base | `ansible idp -b -m shell -a 'sudo -u postgres pg_dump -Fc keycloak > /var/backups/keycloak_$(date +%F).dump'` |
-| Mettre à jour Keycloak | `keycloak_version` dans `host_vars/idp.yml`, Pull Request, sauvegarde, puis `--tags keycloak` |
+| « username ou mot de passe incorrect » alors que le mot de passe est bon | se connecter sur **`/realms/smb111/account`**, pas sur `/admin/` (qui authentifie sur le realm *master*, où le compte n'existe pas). Identifiant = `nom` en minuscules. |
+| `ERR_CONNECTION_REFUSED` sur `idp.smb111.lan` | ligne résiduelle dans le fichier `hosts` du PC (section 1) ou tunnel WireGuard à reconnecter |
+| La page web ne s'ouvre pas | WireGuard actif ? réglages `DNS` et `AllowedIPs` de la section 1 ? |
+| `Could not resolve hostname idp` | fichier SSH absent ou nommé `config.txt` (section 2) |
+| L'invitation n'arrive pas | regarder les spams, puis le relais : [`relais-mail.md`](relais-mail.md) |
+| Keycloak semble arrêté | depuis `rasb` : `ansible idp -a 'systemctl is-active keycloak postgresql'` |
+| Voir les erreurs de Keycloak | depuis `rasb` : `ansible idp -b -a 'journalctl -u keycloak -n 50 --no-pager'` |
+| Redémarrer Keycloak | depuis `rasb` : `ansible idp -b -a 'systemctl restart keycloak'` |
 
-Les utilisateurs et la configuration de Keycloak ne sont **pas** dans le dépôt : sans
-sauvegarde de la base, une VM recréée repart vide.
+**Sauvegarde** : les comptes et les mots de passe sont dans la base de la VM, pas dans le
+dépôt. Avant toute intervention lourde, depuis `rasb` :
 
----
-
-## 6. Dépannage
-
-| Symptôme | Cause probable | À faire |
-|---|---|---|
-| `Could not resolve hostname idp` | fichier SSH absent ou nommé `config.txt` | voir section 1 |
-| `ssh idp` refusé | WireGuard coupé, ou clé absente de `keys/` | activer WireGuard, vérifier sa clé dans le dépôt |
-| La console ne s'ouvre pas | tunnel fermé, ou ligne absente du fichier `hosts` | relancer `ssh -N idp-console`, vérifier `hosts` |
-| Redirection vers une autre adresse | port local différent de 443 | utiliser exactement `idp-console` |
-| Keycloak ne démarre pas | base arrêtée, mémoire insuffisante | `journalctl -u keycloak`, `systemctl status postgresql`, `free -m` |
-| `health/ready` répond `DOWN` | base injoignable | `systemctl restart postgresql`, puis `keycloak` |
-
-La VM n'a que 1,5 Gio : si Keycloak s'arrête avec `OutOfMemoryError` dans le journal, il faut
-lui donner plus de mémoire dans `group_vars/all/vms.yml` (en la retirant à une autre VM).
+```bash
+ansible idp -b -m shell -a 'sudo -u postgres pg_dump -Fc keycloak > /var/backups/keycloak_$(date +%F).dump'
+```

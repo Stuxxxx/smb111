@@ -1,0 +1,31 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Relais seul : aucune boîte aux lettres, tout part vers {{ mail_service_hote }}.
+compatibility_level = 3.6
+
+myhostname = fw.{{ domaine_interne }}
+mydomain = {{ domaine_interne }}
+myorigin = $mydomain
+
+# Écoute sur le réseau interne uniquement, jamais sur l'interface externe
+inet_interfaces = {{ relais_mail_ecoute | join(', ') }}
+inet_protocols = ipv4
+mynetworks = {{ relais_mail_reseaux | join(' ') }}
+smtpd_relay_restrictions = permit_mynetworks, reject
+smtpd_recipient_restrictions = permit_mynetworks, reject
+
+# Pas de distribution locale
+mydestination =
+local_transport = error:pas de distribution locale sur fw
+alias_maps =
+alias_database =
+
+# Envoi par le service, authentifié et chiffré (refus si le chiffrement échoue)
+relayhost = [{{ mail_service_hote }}]:{{ mail_service_port }}
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = texthash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = encrypt
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+
+smtpd_banner = $myhostname ESMTP
+biff = no
