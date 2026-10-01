@@ -1,0 +1,7 @@
+---
+# Keycloak : fournisseur d'identité (SSO) des services hébergés.
+# Le nom est servi par le DNS de fw (enregistrement déduit de vms.yml).
+keycloak_hostname: "https://idp.{{ domaine_interne }}"
+
+# Comptes de service légitimes : ansible (cloud-init) et postgres (shell bash sous Debian)
+check_comptes_autorises: "{{ ['root', 'ansible', 'postgres'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"

@@ -1,0 +1,23 @@
+[Unit]
+Description=Keycloak, fournisseur d'identité (SSO)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User={{ keycloak_user }}
+Group={{ keycloak_user }}
+EnvironmentFile={{ keycloak_conf_dir }}/keycloak.env
+ExecStart={{ keycloak_home }}/bin/kc.sh start
+# Écouter sur le port 443 sans tourner en root
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+# La JVM s'arrête avec le code 143 sur SIGTERM
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=600
+LimitNOFILE=102642
+
+[Install]
+WantedBy=multi-user.target
