@@ -21,6 +21,8 @@
   roles:
     - role: pve_firewall
       tags: [pve_firewall]
+    - role: wol
+      tags: [wol]
 
 - name: Pare-feu du SI
   hosts: pare_feu

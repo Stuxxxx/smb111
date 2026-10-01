@@ -1,0 +1,29 @@
+#!/bin/bash
+# Géré par Ansible — réveille l'hyperviseur par Wake-on-LAN, puis attend qu'il réponde.
+#   reveil-pve
+set -euo pipefail
+
+mac="$(cat {{ wol_fichier_mac }})"
+hote="{{ wol_test_hote }}"
+port="{{ wol_test_port }}"
+
+repond() { timeout 2 bash -c ": > /dev/tcp/$hote/$port" 2>/dev/null; }
+
+if repond; then
+  echo "L'hyperviseur est déjà allumé ($hote)."
+  exit 0
+fi
+
+wakeonlan -i {{ wol_broadcast }} "$mac" >/dev/null
+echo "Paquet magique envoyé à $mac. Attente du démarrage (5 minutes au plus)…"
+
+for _ in $(seq 1 100); do
+  if repond; then
+    echo "L'hyperviseur répond. Les VM démarrent seules (option onboot)."
+    exit 0
+  fi
+  sleep 3
+done
+
+echo "Pas de réponse après 5 minutes : vérifier le BIOS (Wake-on-LAN) et le câble réseau." >&2
+exit 1
