@@ -78,6 +78,7 @@ cat > "$conf" <<EOF
 [Interface]
 PrivateKey = <clé privée générée par TON client, à ne pas partager>
 Address = $ip/32
+DNS = 10.10.0.1
 
 [Peer]
 PublicKey = $SERVEUR_PUBKEY

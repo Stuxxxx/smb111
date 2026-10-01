@@ -78,27 +78,29 @@ Avec WireGuard (`wg0`) actif, la console s'ouvre directement dans le navigateur.
 par `rasb` puis `wg1` jusqu'à `fw`, qui ne laisse passer vers `idp` que le port 443 depuis les
 postes de `wg0` (liste `services_web_admin` dans `group_vars/all/reseau.yml`). SSH reste en rebond.
 
-**Une seule fois sur le PC :**
+**Une seule fois sur le PC**, dans la configuration WireGuard du client :
 
-1. Dans la configuration WireGuard du client, ajouter le réseau interne à la ligne `AllowedIPs` :
+```
+[Interface]
+...
+DNS = 10.10.0.1
 
-   ```
-   AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
-   ```
+[Peer]
+...
+AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
+```
 
-2. PowerShell **en administrateur** — faire pointer le nom vers `idp` (retirer d'abord une
-   éventuelle ligne `127.0.0.1   idp.smb111.lan` laissée par l'ancienne méthode) :
-
-   ```powershell
-   Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "10.10.0.5   idp.smb111.lan"
-   ```
+`DNS` fait résoudre les noms par le DNS du SI (dnsmasq sur `fw`) tant que le tunnel est actif :
+`idp.smb111.lan` et les futurs services fonctionnent sans fichier hosts, Internet reste résolu
+normalement, et `mabbox.bytel.fr` est transmis à la box. Retirer toute ligne `idp.smb111.lan` du fichier
+hosts : elle passerait avant le DNS.
 
 **Ensuite :** ouvrir `https://idp.smb111.lan/admin/` et accepter l'avertissement (certificat
 autosigné, en attendant la PKI interne). Le nom doit rester `idp.smb111.lan` : Keycloak redirige
 vers l'URL exacte.
 
-**Sans WireGuard** (secours) : tunnel SSH par `rasb`, avec la ligne hosts `127.0.0.1   idp.smb111.lan`
-à la place de la précédente, puis `ssh -N -L 443:localhost:443 -J <ton_nom>@192.168.1.90 <ton_nom>@10.10.0.5`
+**Sans WireGuard** (secours) : tunnel SSH par `rasb`, avec la ligne `127.0.0.1   idp.smb111.lan`
+dans le fichier hosts (à retirer ensuite), puis `ssh -N -L 443:localhost:443 -J <ton_nom>@192.168.1.90 <ton_nom>@10.10.0.5`
 (ou `ssh -N idp-console`), fenêtre laissée ouverte.
 
 ---

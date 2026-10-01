@@ -34,5 +34,7 @@ fw_dns_amont: ["1.1.1.1", "9.9.9.9"]
 fw_dns_domaine: "{{ domaine_interne }}"
 # Un enregistrement par VM déclarée dans vms.yml
 fw_dns_hotes: "{{ vms | map(attribute='name') | zip(vms | map(attribute='ip')) | list }}"
+# Domaines résolus par un serveur particulier : [{domaine, serveur}]
+fw_dns_transferts: []
 # Journal des requêtes DNS : désactivé par défaut (minimisation des données)
 fw_dns_log_requetes: false

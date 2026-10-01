@@ -13,6 +13,8 @@ wg_lan_interdits: []
 # Relais des pairs vers le lien wg1 (réseau interne) : seuls ces services passent
 wg_lien_iface: wg1
 wg_services_lien: []
+# Résolveur du réseau interne joignable par les pairs ("" = aucun)
+wg_dns_lien: ""
 
 # Relais autorisés entre pairs du tunnel (sinon, aucun trafic pair à pair)
 wg_relais: []

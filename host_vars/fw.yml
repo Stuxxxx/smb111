@@ -5,6 +5,11 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1 {{ admin_ip_lan }}"
 # Le compte de service n'est pas dans la liste du dépôt
 check_comptes_autorises: "{{ ['root', 'ansible'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"
 
+# Interface de la box : nom connu de son seul DNS, utile aux postes wg0
+# qui résolvent par fw
+fw_dns_transferts:
+  - { domaine: mabbox.bytel.fr, serveur: "{{ passerelle_externe }}" }
+
 # Lien d'administration wg1 : fw écoute, rasb se connecte
 wg_lien_enabled: true
 wg_lien_adresse: "{{ lien_admin_fw }}/30"

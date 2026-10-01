@@ -28,6 +28,7 @@ wg_lan_interdits:
   - "{{ fw_ip_externe }}"
 wg_peers: "{{ wg_peers_declares }}"
 wg_services_lien: "{{ services_web_admin }}"
+wg_dns_lien: "{{ passerelle_interne }}"
 
 wg_relais:
   - vers: 10.99.0.100
