@@ -13,4 +13,5 @@ wg_lien_cle_privee: "{{ vault_wg_lien_fw_private | default('') }}"
 wg_lien_pair:
   nom: rasb
   public_key: "{{ wg_lien_cle_publique_rasb }}"
-  allowed_ips: ["{{ lien_admin_rasb }}/32"]
+  # rasb, et les postes wg0 qu'il relaie vers les interfaces web
+  allowed_ips: ["{{ lien_admin_rasb }}/32", "{{ reseau_wg0 }}"]

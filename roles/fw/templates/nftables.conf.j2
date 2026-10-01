@@ -9,6 +9,7 @@ define ADMIN = { {{ fw_ssh_sources | join(', ') }} }
 define INTERDITS = { {{ fw_destinations_interdites | join(', ') }} }
 define IF_LIEN = "{{ fw_lien_iface }}"
 define ADMIN_LIEN = {{ fw_lien_admin }}
+define POSTES = {{ fw_lien_postes }}
 
 table inet filtre {
   chain input {
@@ -51,6 +52,11 @@ table inet filtre {
     # rasb, par wg1, administre les VM internes (sans NAT : les VM voient son adresse)
     iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT tcp dport { {{ fw_lien_ports_internes | join(', ') }} } accept
     iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT icmp type echo-request accept
+
+    # Postes des administrateurs (wg0, relayés par rasb, sans NAT) : interfaces web seulement
+{% for s in fw_services_web_admin %}
+    iifname $IF_LIEN oifname $IF_INT ip saddr $POSTES ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
+{% endfor %}
 
     # Les VM sortent vers Internet, jamais vers le réseau local
     iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT ip daddr $INTERDITS drop
