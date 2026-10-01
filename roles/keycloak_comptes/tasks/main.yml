@@ -1,0 +1,212 @@
+---
+# Realm, groupes et SMTP du SSO. La gestion des comptes se fait en ligne de
+# commande (voir defaults/main.yml) : rien n'est décrit dans le dépôt.
+# Aucun mot de passe ne passe par Ansible : chaque nouveau compte reçoit une
+# invitation par e-mail pour choisir le sien et activer la double authentification.
+
+# --- Compte d'automatisation -------------------------------------------------
+- name: Le compte d'automatisation existe-t-il ?
+  ansible.builtin.uri:
+    url: "{{ kc_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: password
+      client_id: admin-cli
+      username: "{{ kc_compte_ansible }}"
+      password: "{{ kc_compte_ansible_mdp }}"
+    validate_certs: false
+    status_code: [200, 401]
+  register: kc_test_ansible
+  no_log: true
+
+- name: Créer le compte d'automatisation (premier passage)
+  when: kc_test_ansible.status == 401
+  module_defaults:
+    group/middleware_automation.keycloak.keycloak:
+      auth_keycloak_url: "{{ kc_url }}"
+      auth_realm: master
+      auth_client_id: admin-cli
+      auth_username: "{{ kc_compte_demarrage }}"
+      auth_password: "{{ kc_compte_demarrage_mdp }}"
+      validate_certs: false
+  block:
+    - name: Compte {{ kc_compte_ansible }} dans le realm master
+      middleware_automation.keycloak.keycloak_user:
+        realm: master
+        username: "{{ kc_compte_ansible }}"
+        enabled: true
+        credentials:
+          - type: password
+            value: "{{ kc_compte_ansible_mdp }}"
+            temporary: false
+      no_log: true
+
+    - name: Droits d'administration du compte {{ kc_compte_ansible }}
+      middleware_automation.keycloak.keycloak_user_rolemapping:
+        realm: master
+        target_username: "{{ kc_compte_ansible }}"
+        roles:
+          - name: admin
+
+# --- Realm, groupes, SMTP ----------------------------------------------------
+- name: Configuration du SSO
+  module_defaults:
+    group/middleware_automation.keycloak.keycloak:
+      auth_keycloak_url: "{{ kc_url }}"
+      auth_realm: master
+      auth_client_id: admin-cli
+      auth_username: "{{ kc_compte_ansible }}"
+      auth_password: "{{ kc_compte_ansible_mdp }}"
+      validate_certs: false
+  block:
+    - name: Realm {{ kc_realm }}
+      middleware_automation.keycloak.keycloak_realm:
+        id: "{{ kc_realm }}"
+        realm: "{{ kc_realm }}"
+        display_name: "{{ kc_realm_nom_affiche }}"
+        enabled: true
+        registration_allowed: false       # pas d'inscription libre
+        reset_password_allowed: true      # « mot de passe oublié », par e-mail
+        password_policy: "{{ kc_politique_mdp }}"
+        brute_force_protected: true
+        failure_factor: "{{ kc_echecs_avant_blocage }}"
+        permanent_lockout: false
+        # Envoi par le relais de fw, sans authentification (réseau interne)
+        smtp_server:
+          host: "{{ mail_relais_interne }}"
+          port: "25"
+          from: "{{ mail_expediteur }}"
+          fromDisplayName: "{{ mail_expediteur_nom }}"
+          starttls: "false"
+          ssl: "false"
+          auth: "false"
+
+    - name: Groupes
+      middleware_automation.keycloak.keycloak_group:
+        realm: "{{ kc_realm }}"
+        name: "{{ item }}"
+      loop: "{{ kc_groupes }}"
+
+    - name: Le groupe {{ kc_groupe_admin }} administre le realm
+      middleware_automation.keycloak.keycloak_client_rolemapping:
+        realm: "{{ kc_realm }}"
+        group_name: "{{ kc_groupe_admin }}"
+        client_id: realm-management
+        roles:
+          - name: realm-admin
+
+    # --- Lister les comptes du realm (-e diag=true) --------------------------
+    # Affiche identifiant, email, état et id de chaque compte. Pratique pour
+    # vérifier qui existe sans ouvrir la console.
+    - name: Lister les comptes du realm
+      when: diag | default(false) | bool
+      block:
+        - name: Lire les comptes
+          middleware_automation.keycloak.keycloak_realm_users_info:
+            realm: "{{ kc_realm }}"
+          register: kc_diag
+
+        - name: Afficher chaque compte
+          ansible.builtin.debug:
+            msg: >-
+              {{ item.username }} | email={{ item.email | default('-') }} |
+              enabled={{ item.enabled | default('-') }} |
+              emailVerified={{ item.emailVerified | default('-') }} | id={{ item.id }}
+          loop: "{{ kc_diag.users | default([]) }}"
+          loop_control:
+            label: "{{ item.username }}"
+
+    # --- Gestion d'un compte, demandée en ligne de commande ------------------
+    # Une commande décrit l'état voulu du compte. Pour créer ou modifier
+    # (groupes, actif), on redonne l'email. L'invitation part automatiquement
+    # pour un compte nouveau ; -e renvoyer=true la renvoie à un compte existant.
+    - name: Gérer le compte {{ kc_nom }}
+      when: kc_nom | length > 0
+      block:
+        - name: Comptes existants du realm
+          middleware_automation.keycloak.keycloak_realm_users_info:
+            realm: "{{ kc_realm }}"
+          register: kc_liste
+
+        - name: Le compte {{ kc_nom }} est-il nouveau ?
+          ansible.builtin.set_fact:
+            kc_nouveau: "{{ kc_nom not in (kc_liste.users | default([]) | map(attribute='username') | list) }}"
+
+        - name: Une adresse e-mail est fournie pour créer le compte {{ kc_nom }}
+          ansible.builtin.assert:
+            that: kc_etat != 'present' or not kc_nouveau or (kc_email | length > 0)
+            fail_msg: >-
+              Nouveau compte : préciser l'adresse e-mail -> -e "nom={{ kc_nom }} email=..."
+            quiet: true
+
+        - name: Les groupes demandés existent
+          ansible.builtin.assert:
+            that: kc_groupes_demandes | difference(kc_groupes) | length == 0
+            fail_msg: >-
+              Groupe inconnu : {{ kc_groupes_demandes | difference(kc_groupes) | join(', ') }}
+              (groupes connus : {{ kc_groupes | join(', ') }})
+            quiet: true
+          when:
+            - kc_etat == 'present'
+            - kc_email | length > 0
+
+        # Exécuté quand on fournit l'email (création, ou mise à jour groupes/actif)
+        - name: Compte {{ kc_nom }} présent
+          when:
+            - kc_etat == 'present'
+            - kc_email | length > 0
+          middleware_automation.keycloak.keycloak_user:
+            realm: "{{ kc_realm }}"
+            username: "{{ kc_nom }}"
+            email: "{{ kc_email }}"
+            email_verified: true              # adresse fournie par un admin
+            enabled: "{{ kc_actif }}"
+            # Groupes : ceux demandés, et retrait de tous les autres groupes gérés
+            groups: >-
+              {{ (kc_groupes_demandes | map('community.general.dict_kv', 'name') | list)
+                 + (kc_groupes | difference(kc_groupes_demandes)
+                    | map('community.general.dict_kv', 'name')
+                    | map('combine', {'state': 'absent'}) | list) }}
+
+        # Mot de passe temporaire posé par un admin (-e mdp=...)
+        - name: Mot de passe temporaire pour {{ kc_nom }}
+          when:
+            - kc_etat == 'present'
+            - kc_mdp | length > 0
+          middleware_automation.keycloak.keycloak_user:
+            realm: "{{ kc_realm }}"
+            username: "{{ kc_nom }}"
+            credentials:
+              - type: password
+                value: "{{ kc_mdp }}"
+                temporary: true          # à changer à la première connexion
+          no_log: true
+
+        # Invitation : automatique pour un nouveau compte, ou -e renvoyer=true
+        - name: Invitation par e-mail à {{ kc_nom }}
+          when:
+            - kc_etat == 'present'
+            - kc_actif
+            - kc_nouveau or kc_renvoyer_invitation
+          middleware_automation.keycloak.keycloak_user_execute_actions_email:
+            realm: "{{ kc_realm }}"
+            username: "{{ kc_nom }}"
+            actions: "{{ kc_actions_invitation }}"
+            lifespan: "{{ kc_invitation_duree }}"
+            client_id: account-console
+            redirect_uri: "{{ keycloak_hostname }}/realms/{{ kc_realm }}/account/"
+
+        - name: Compte {{ kc_nom }} supprimé
+          when: kc_etat == 'absent'
+          middleware_automation.keycloak.keycloak_user:
+            realm: "{{ kc_realm }}"
+            username: "{{ kc_nom }}"
+            state: absent
+
+    - name: Supprimer le compte de démarrage {{ kc_compte_demarrage }}
+      middleware_automation.keycloak.keycloak_user:
+        realm: master
+        username: "{{ kc_compte_demarrage }}"
+        state: absent
+      when: kc_supprimer_demarrage | bool

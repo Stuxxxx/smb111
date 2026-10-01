@@ -36,6 +36,11 @@ table inet filtre {
 
     # DNS pour les VM internes
     iifname $IF_INT ip saddr $RESEAU_INT meta l4proto { tcp, udp } th dport 53 accept
+{% if fw_relais_mail %}
+
+    # Relais de messagerie pour les VM internes
+    iifname $IF_INT ip saddr $RESEAU_INT tcp dport 25 accept
+{% endif %}
 
     # Diffusions du réseau local (découverte de services, IGMP de la box) :
     # rejetées sans journal, pour que celui-ci ne montre que les vraies tentatives

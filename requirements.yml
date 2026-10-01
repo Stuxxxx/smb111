@@ -5,3 +5,4 @@ collections:
   - name: kubernetes.core
   - name: community.proxmox
   - name: community.postgresql
+  - name: middleware_automation.keycloak

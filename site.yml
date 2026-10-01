@@ -31,6 +31,8 @@
       tags: [fw]
     - role: wg_lien
       tags: [fw, wg1]
+    - role: relais_mail
+      tags: [fw, mail]
 
 - name: VM du réseau interne
   hosts: interne
@@ -44,6 +46,8 @@
   roles:
     - role: keycloak
       tags: [keycloak]
+    - role: keycloak_comptes
+      tags: [keycloak, comptes]
 
 - name: Gestion des administrateurs
   import_playbook: admins.yml

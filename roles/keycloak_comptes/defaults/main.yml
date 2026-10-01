@@ -1,0 +1,62 @@
+---
+# API d'administration, appelée depuis idp elle-même (fw ne laisse pas passer
+# le port 443 depuis rasb)
+kc_url: "https://localhost"
+
+# Realm du projet : utilisateurs et services
+kc_realm: smb111
+kc_realm_nom_affiche: "SMB111"
+
+# Compte d'automatisation (realm master), créé au premier passage
+kc_compte_ansible: ansible
+kc_compte_ansible_mdp: "{{ vault_keycloak_ansible_password }}"
+
+# Compte de démarrage du rôle keycloak : sert une seule fois, à créer le
+# compte d'automatisation, puis il est supprimé
+kc_compte_demarrage: admin-temp
+kc_compte_demarrage_mdp: "{{ vault_keycloak_admin_password }}"
+kc_supprimer_demarrage: true
+
+# Invitation envoyée aux nouveaux comptes : choisir son mot de passe et
+# activer la double authentification. Lien valable kc_invitation_duree secondes.
+kc_actions_invitation:
+  - UPDATE_PASSWORD
+  - CONFIGURE_TOTP
+kc_invitation_duree: 172800        # 48 h
+
+# Groupes du realm. Les membres de kc_groupe_admin administrent le realm
+# depuis la console (rôle realm-admin).
+kc_groupes:
+  - admins
+  - utilisateurs
+kc_groupe_admin: admins
+
+# Sécurité du realm
+kc_politique_mdp: "length(12) and notUsername"
+kc_echecs_avant_blocage: 5
+
+# --- Gestion d'un compte en ligne de commande --------------------------------
+# Les comptes ne sont pas décrits dans le dépôt : ils vivent dans Keycloak.
+# On agit sur un compte en passant ses paramètres à la commande, par exemple :
+#
+#   ansible-playbook site.yml --limit idp --tags comptes \
+#     -e "nom=jdupont email=jdupont@exemple.fr groupes=utilisateurs"
+#
+#   nom       identifiant de connexion          (obligatoire pour agir)
+#   email     adresse de la personne            (obligatoire à la création)
+#   groupes   admins et/ou utilisateurs,
+#             séparés par des virgules          (défaut : utilisateurs)
+#   actif     false = compte bloqué, conservé   (défaut : true)
+#   etat      absent = compte supprimé          (défaut : present)
+#   renvoyer  true = renvoyer l'invitation à un compte existant
+#
+# Sans « nom », le rôle se contente de maintenir le realm, les groupes et le SMTP.
+kc_nom: "{{ nom | default('') }}"
+kc_email: "{{ email | default('') }}"
+# Mot de passe temporaire posé par un admin : -e "nom=X mdp=Provisoire1!"
+# (la personne devra le changer à la première connexion)
+kc_mdp: "{{ mdp | default('') }}"
+kc_groupes_demandes: "{{ (groupes | default('utilisateurs')).split(',') | map('trim') | select | list }}"
+kc_actif: "{{ actif | default(true) | bool }}"
+kc_etat: "{{ etat | default('present') }}"
+kc_renvoyer_invitation: "{{ renvoyer | default(false) | bool }}"

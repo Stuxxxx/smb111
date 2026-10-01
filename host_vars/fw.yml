@@ -20,3 +20,6 @@ wg_lien_pair:
   public_key: "{{ wg_lien_cle_publique_rasb }}"
   # rasb, et les postes wg0 qu'il relaie vers les interfaces web
   allowed_ips: ["{{ lien_admin_rasb }}/32", "{{ reseau_wg0 }}"]
+
+# Relais de messagerie pour les VM internes (rôle relais_mail)
+fw_relais_mail: true
