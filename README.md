@@ -22,6 +22,7 @@ manifests Kubernetes, documentation et schémas.
 | [`docs/procedure-keycloak.md`](docs/procedure-keycloak.md) | installation de la VM `idp` (Keycloak, SSO) |
 | [`docs/utilisation-idp.md`](docs/utilisation-idp.md) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
 | [`docs/relais-mail.md`](docs/relais-mail.md) | relais de messagerie sur `fw` : envoi des e-mails des VM |
+| [`docs/pki.md`](docs/pki.md) | PKI interne : création, émission des certificats, confiance sur les postes |
 
 ---
 

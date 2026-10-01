@@ -80,6 +80,15 @@
     group: "{{ keycloak_user }}"
     mode: "0750"
 
+- name: Certificat émis par la PKI du SI
+  ansible.builtin.import_role:
+    name: certificat
+  vars:
+    certificat_nom: "{{ keycloak_cert_nom }}"
+    certificat_dns: "{{ keycloak_cert_dns }}"
+    certificat_groupe: "{{ keycloak_user }}"
+  when: not keycloak_cert_autosigne | bool
+
 - name: Certificat autosigné
   when: keycloak_cert_autosigne | bool
   block:
