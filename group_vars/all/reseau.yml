@@ -17,3 +17,11 @@ domaine_interne: smb111.lan
 lien_admin_fw: 10.98.0.1
 lien_admin_rasb: 10.98.0.2
 lien_admin_port: 51821
+
+# Tunnel wg0 : postes des administrateurs
+reseau_wg0: 10.99.0.0/24
+
+# Interfaces web d'administration des VM, ouvertes aux postes de wg0 (et à
+# rien d'autre). Elles passent par rasb puis wg1 ; SSH reste en rebond.
+services_web_admin:
+  - { nom: keycloak, ip: 10.10.0.5, port: 443 }
