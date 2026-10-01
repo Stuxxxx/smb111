@@ -48,8 +48,10 @@ ansible-vault edit group_vars/all/vault.yml
 | `vault_keycloak_db_password` | tiré par `openssl rand -base64 32` |
 | `vault_keycloak_admin_password` | tiré par `openssl rand -base64 32` (compte de démarrage) |
 | `vault_keycloak_ansible_password` | tiré par `openssl rand -base64 32` (compte d'Ansible) |
-| `vault_keycloak_emails` | l'adresse e-mail de chaque compte |
 | `vault_mail_service_utilisateur`, `vault_mail_service_mdp` | le compte d'envoi des e-mails |
+
+Les comptes des personnes ne sont **pas** dans le vault : ils se créent en ligne de
+commande (voir [`utilisation-idp.md`](utilisation-idp.md)).
 
 Ne jamais copier ces valeurs ailleurs que dans le vault.
 
@@ -74,8 +76,9 @@ ansible idp -m ping                      # doit répondre "pong"
 ansible-playbook site.yml --limit idp
 ```
 
-Dans l'ordre : sécurité de base, Keycloak, puis les comptes de
-`host_vars/idp/utilisateurs.yml`, qui reçoivent chacun leur invitation.
+Dans l'ordre : sécurité de base, Keycloak, puis le realm, les groupes et le SMTP.
+Les comptes des personnes se créent ensuite un par un, en ligne de commande
+(voir [`utilisation-idp.md`](utilisation-idp.md)).
 
 ### 6. Vérifier
 

@@ -14,7 +14,7 @@ Il tourne sur la VM `idp`, à l'adresse `https://idp.smb111.lan`.
 
 | Je veux… | Je fais… |
 |---|---|
-| Ajouter, bloquer ou retirer quelqu'un | je modifie `host_vars/idp/utilisateurs.yml` (section 3) |
+| Ajouter, bloquer ou retirer quelqu'un | une commande `ansible-playbook` (section 3) |
 | Gérer mon compte (mot de passe, double authentification) | `https://idp.smb111.lan/realms/smb111/account` |
 | Gérer les comptes à la souris (groupe `admins`) | `https://idp.smb111.lan/admin/smb111/console/` |
 | Entrer dans la VM | `ssh idp` (section 2) |
@@ -75,36 +75,47 @@ Le point à la fin de `config.` empêche le Bloc-notes d'ajouter `.txt`. Ensuite
 
 ### La règle
 
-Les comptes sont décrits dans **`host_vars/idp/utilisateurs.yml`**, comme les accès SSH :
-on modifie le fichier, Pull Request, puis on applique. Ne crée pas de compte à la main dans
-la console : il serait inconnu du dépôt.
+Les comptes se gèrent **en ligne de commande**, depuis `rasb` : une commande par action,
+rien à éditer (ni fichier, ni vault). Les comptes vivent dans Keycloak, pas dans le dépôt —
+pense donc à la sauvegarde (fin de section 4).
 
-```yaml
-keycloak_utilisateurs:
-  - { nom: alice, groupes: [utilisateurs] }                 # compte normal
-  - { nom: bob,   groupes: [admins] }                       # gère les comptes
-  - { nom: carol, groupes: [utilisateurs], actif: false }   # bloqué, conservé
-  - { nom: dave,  state: absent }                           # supprimé
-```
-
-**Le dépôt est public** : seulement l'identifiant et les groupes. L'**adresse e-mail** va dans
-le vault, qui est chiffré :
+**Ajouter quelqu'un** (l'email n'est demandé qu'ici, il n'est stocké nulle part dans le dépôt) :
 
 ```bash
-ansible-vault edit group_vars/all/vault.yml
+ansible-playbook site.yml --limit idp --tags comptes \
+  -e "nom=alice email=alice@exemple.org groupes=utilisateurs"
 ```
 
-```yaml
-vault_keycloak_emails:
-  alice: "adresse@exemple.org"
-  bob: "autre@exemple.org"
-```
+| Paramètre | Rôle | Défaut |
+|---|---|---|
+| `nom` | identifiant de connexion | obligatoire |
+| `email` | où la personne reçoit son invitation | obligatoire à la création |
+| `groupes` | `admins` et/ou `utilisateurs`, séparés par des virgules | `utilisateurs` |
+| `actif` | `false` = compte bloqué mais conservé | `true` |
+| `etat` | `absent` = compte supprimé | `present` |
 
-Appliquer, depuis `rasb` :
+**Mettre dans le groupe `admins`** (peut gérer les comptes à la console) :
 
 ```bash
-ansible-playbook site.yml --limit idp --tags comptes
+ansible-playbook site.yml --limit idp --tags comptes \
+  -e "nom=bob email=bob@exemple.org groupes=admins"
 ```
+
+**Bloquer** (sans supprimer), puis **réactiver** :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice actif=false"
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice actif=true"
+```
+
+**Supprimer** :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice etat=absent"
+```
+
+> Un run **sans** `-e nom=...` ne touche à aucun compte : il se contente de maintenir le
+> realm, les groupes et le SMTP.
 
 ### Ce que reçoit un nouveau compte
 
@@ -113,10 +124,10 @@ ansible-playbook site.yml --limit idp --tags comptes
    la double authentification** (application type Google Authenticator, FreeOTP ou Aegis).
 3. Personne d'autre ne connaît jamais son mot de passe.
 
-**Lien expiré ou e-mail perdu** :
+**Lien expiré ou e-mail perdu** (renvoyer l'invitation) :
 
 ```bash
-ansible-playbook site.yml --limit idp --tags comptes -e renvoyer=alice
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice renvoyer=true"
 ```
 
 **Mot de passe oublié** : la personne clique sur « Mot de passe oublié ? » sur la page de
