@@ -13,3 +13,21 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # gitleaks ne repère pas forcément une clé EC en clair : on vérifie que
+  # chaque clé de la PKI est bien un fichier ansible-vault.
+  pki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clés de la PKI chiffrées par ansible-vault
+        run: |
+          ok=true
+          for f in pki/*.key; do
+            [ -e "$f" ] || continue
+            if ! head -n1 "$f" | grep -q '^\$ANSIBLE_VAULT;'; then
+              echo "::error file=$f::clé privée en clair"
+              ok=false
+            fi
+          done
+          $ok

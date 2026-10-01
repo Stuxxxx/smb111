@@ -1,0 +1,90 @@
+---
+- name: Bibliothèque cryptography (modules community.crypto)
+  ansible.builtin.apt:
+    name: python3-cryptography
+    state: present
+
+- name: Répertoire des certificats
+  ansible.builtin.file:
+    path: "{{ certificat_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clé privée {{ certificat_nom }}
+  community.crypto.openssl_privatekey:
+    path: "{{ certificat_dir }}/{{ certificat_nom }}.key"
+    type: ECC
+    curve: secp256r1
+    owner: root
+    group: "{{ certificat_groupe }}"
+    mode: "0640"
+  notify: certificat renouvelé
+
+- name: Demande de certificat {{ certificat_nom }}
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ certificat_dir }}/{{ certificat_nom }}.key"
+    common_name: "{{ certificat_dns | first }}"
+    organization_name: "{{ pki_organisation }}"
+    subject_alt_name: >-
+      {{ certificat_dns | map('regex_replace', '^', 'DNS:') | list
+         + certificat_ip | map('regex_replace', '^', 'IP:') | list }}
+    extended_key_usage: [serverAuth]
+  register: certificat_csr
+  changed_when: false
+
+# --- Certificat en place : à conserver s'il est valide encore un moment -------
+- name: Certificat actuel
+  ansible.builtin.slurp:
+    src: "{{ certificat_dir }}/{{ certificat_nom }}.crt"
+  register: certificat_actuel
+  failed_when: false
+
+- name: Échéance du certificat actuel
+  community.crypto.x509_certificate_info:
+    path: "{{ certificat_dir }}/{{ certificat_nom }}.crt"
+    valid_at:
+      renouvellement: "{{ certificat_renouvellement }}"
+  register: certificat_info
+  failed_when: false
+
+# La signature a lieu sur le nœud de contrôle, seul à pouvoir déchiffrer la
+# clé de l'intermédiaire. Le module réémet aussi si la demande a changé
+# (noms ajoutés, nouvelle clé) ou si l'intermédiaire a été remplacé.
+- name: Signature par l'intermédiaire de la PKI
+  community.crypto.x509_certificate_pipe:
+    content: "{{ certificat_actuel.content | b64decode if certificat_actuel.content is defined else omit }}"
+    csr_content: "{{ certificat_csr.csr }}"
+    provider: ownca
+    ownca_content: "{{ lookup('ansible.builtin.file', pki_dir ~ '/intermediaire.crt') }}"
+    ownca_privatekey_content: "{{ lookup('ansible.builtin.unvault', pki_dir ~ '/intermediaire.key') }}"
+    ownca_not_after: "{{ certificat_duree }}"
+    force: "{{ not (certificat_info.valid_at.renouvellement | default(false)) }}"
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  register: certificat_signe
+
+- name: Certificat {{ certificat_nom }}
+  ansible.builtin.copy:
+    content: "{{ certificat_signe.certificate | trim }}\n"
+    dest: "{{ certificat_dir }}/{{ certificat_nom }}.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: certificat renouvelé
+  when: certificat_signe.certificate is defined     # absent en --check s'il faut réémettre
+
+- name: Chaîne présentée aux clients (certificat + intermédiaire)
+  ansible.builtin.copy:
+    content: |
+      {{ certificat_signe.certificate | trim }}
+      {{ lookup('ansible.builtin.file', pki_dir ~ '/intermediaire.crt') | trim }}
+    dest: "{{ certificat_dir }}/{{ certificat_nom }}-chaine.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: certificat renouvelé
+  when: certificat_signe.certificate is defined

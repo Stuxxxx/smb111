@@ -4,6 +4,8 @@
   become: true
   roles:
     - common
+    - role: pki
+      tags: [pki]
 
 - name: Machine d'administration
   hosts: admin

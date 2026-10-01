@@ -1,0 +1,18 @@
+---
+# PKI interne du SI (docs/pki.md).
+#
+#   racine          signe l'intermédiaire, et rien d'autre
+#   intermédiaire   signe les certificats des services (et, plus tard, cert-manager)
+#
+# Les certificats des CA sont publics et versionnés dans pki/. Leurs clés
+# privées y sont aussi, chiffrées par ansible-vault. Création : playbooks/pki-init.yml.
+pki_dir: "{{ inventory_dir }}/pki"
+
+pki_organisation: "SMB111"
+pki_racine_cn: "SMB111 Racine"
+pki_racine_duree: "+3650d"            # 10 ans
+pki_intermediaire_cn: "SMB111 Intermediaire"
+pki_intermediaire_duree: "+1825d"     # 5 ans
+
+# Sur chaque machine : clés et certificats des services émis par le rôle certificat
+pki_certificats_dir: /etc/ssl/smb111
