@@ -96,8 +96,10 @@
         roles:
           - name: realm-admin
 
-    # --- Diagnostic : lister tous les comptes (-e diag=true) -----------------
-    - name: Diagnostic des comptes du realm
+    # --- Lister les comptes du realm (-e diag=true) --------------------------
+    # Affiche identifiant, email, état et id de chaque compte. Pratique pour
+    # vérifier qui existe sans ouvrir la console.
+    - name: Lister les comptes du realm
       when: diag | default(false) | bool
       block:
         - name: Lire les comptes

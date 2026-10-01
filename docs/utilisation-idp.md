@@ -118,6 +118,18 @@ ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice etat=absent"
 > Un run **sans** `-e nom=...` ne touche à aucun compte : il se contente de maintenir le
 > realm, les groupes et le SMTP.
 
+**Réinitialiser un mot de passe** (temporaire, à changer à la première connexion) :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice mdp=Temporaire2026!"
+```
+
+**Lister les comptes existants** (identifiant, email, état) :
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes -e "diag=true"
+```
+
 ### Ce que reçoit un nouveau compte
 
 1. Un **e-mail d'invitation** (lien valable 48 h).
@@ -148,6 +160,8 @@ console → *Users* → la personne → *Unlock*.
 
 | Problème | Solution |
 |---|---|
+| « username ou mot de passe incorrect » alors que le mot de passe est bon | se connecter sur **`/realms/smb111/account`**, pas sur `/admin/` (qui authentifie sur le realm *master*, où le compte n'existe pas). Identifiant = `nom` en minuscules. |
+| `ERR_CONNECTION_REFUSED` sur `idp.smb111.lan` | ligne résiduelle dans le fichier `hosts` du PC (section 1) ou tunnel WireGuard à reconnecter |
 | La page web ne s'ouvre pas | WireGuard actif ? réglages `DNS` et `AllowedIPs` de la section 1 ? |
 | `Could not resolve hostname idp` | fichier SSH absent ou nommé `config.txt` (section 2) |
 | L'invitation n'arrive pas | regarder les spams, puis le relais : [`relais-mail.md`](relais-mail.md) |
