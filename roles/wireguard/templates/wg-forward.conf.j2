@@ -11,6 +11,18 @@ table ip wgfwd {
     # les machines administrées ne sont jointes qu'en rebond SSH, jamais en direct
     iifname "{{ wg_interface }}" oifname "{{ wg_lan_iface }}" ip daddr { {{ wg_lan_interdits | join(', ') }} } drop comment "administration par rebond uniquement"
 {% endif %}
+{% if wg_lien_enabled | default(false) %}
+
+    # Vers le réseau interne par wg1 : interfaces web seulement, SSH reste en rebond
+{% for s in wg_services_lien %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
+{% endfor %}
+{% if wg_dns_lien %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" ip daddr {{ wg_dns_lien }} meta l4proto { tcp, udp } th dport 53 accept comment "DNS du SI"
+{% endif %}
+    iifname "{{ wg_interface }}" oifname "{{ wg_lien_iface }}" drop
+{% endif %}
+
 {% for r in wg_relais %}
     iifname "{{ wg_interface }}" oifname "{{ wg_interface }}" ip daddr {{ r.vers }} tcp dport {{ r.port }} accept comment "{{ r.commentaire | default('relais') }}"
 {% endfor %}

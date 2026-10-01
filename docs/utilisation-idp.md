@@ -74,21 +74,34 @@ ansible-playbook playbooks/check.yml --limit idp
 
 ## 3. Ouvrir la console d'administration
 
-**Une seule fois** — PowerShell **en administrateur** :
+Avec WireGuard (`wg0`) actif, la console s'ouvre directement dans le navigateur. Le flux passe
+par `rasb` puis `wg1` jusqu'à `fw`, qui ne laisse passer vers `idp` que le port 443 depuis les
+postes de `wg0` (liste `services_web_admin` dans `group_vars/all/reseau.yml`). SSH reste en rebond.
 
-```powershell
-Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value "127.0.0.1   idp.smb111.lan"
+**Une seule fois sur le PC**, dans la configuration WireGuard du client :
+
+```
+[Interface]
+...
+DNS = 10.10.0.1
+
+[Peer]
+...
+AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
 ```
 
-**À chaque fois** — PowerShell normal, fenêtre laissée ouverte :
+`DNS` fait résoudre les noms par le DNS du SI (dnsmasq sur `fw`) tant que le tunnel est actif :
+`idp.smb111.lan` et les futurs services fonctionnent sans fichier hosts, Internet reste résolu
+normalement, et `mabbox.bytel.fr` est transmis à la box. Retirer toute ligne `idp.smb111.lan` du fichier
+hosts : elle passerait avant le DNS.
 
-```powershell
-ssh -N idp-console
-```
+**Ensuite :** ouvrir `https://idp.smb111.lan/admin/` et accepter l'avertissement (certificat
+autosigné, en attendant la PKI interne). Le nom doit rester `idp.smb111.lan` : Keycloak redirige
+vers l'URL exacte.
 
-Puis `https://idp.smb111.lan/admin/` dans le navigateur. L'avertissement de certificat est
-attendu (certificat autosigné). Le port local doit rester 443 : Keycloak redirige vers l'URL
-exacte.
+**Sans WireGuard** (secours) : tunnel SSH par `rasb`, avec la ligne `127.0.0.1   idp.smb111.lan`
+dans le fichier hosts (à retirer ensuite), puis `ssh -N -L 443:localhost:443 -J <ton_nom>@192.168.1.90 <ton_nom>@10.10.0.5`
+(ou `ssh -N idp-console`), fenêtre laissée ouverte.
 
 ---
 

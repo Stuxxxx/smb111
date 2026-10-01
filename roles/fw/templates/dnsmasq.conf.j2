@@ -14,6 +14,9 @@ server={{ s }}
 domain-needed
 bogus-priv
 local=/{{ fw_dns_domaine }}/
+{% for t in fw_dns_transferts %}
+server=/{{ t.domaine }}/{{ t.serveur }}
+{% endfor %}
 domain={{ fw_dns_domaine }}
 
 {% for nom, ip in fw_dns_hotes %}
