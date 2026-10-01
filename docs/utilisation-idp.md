@@ -101,11 +101,12 @@ ansible-playbook site.yml --limit idp --tags comptes \
   -e "nom=bob email=bob@exemple.org groupes=admins"
 ```
 
-**Bloquer** (sans supprimer), puis **réactiver** :
+**Modifier** un compte (groupes, blocage) = relancer avec son **état voulu complet**,
+email compris. Bloquer sans supprimer, puis réactiver :
 
 ```bash
-ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice actif=false"
-ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice actif=true"
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice email=alice@exemple.org groupes=utilisateurs actif=false"
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice email=alice@exemple.org groupes=utilisateurs actif=true"
 ```
 
 **Supprimer** :
