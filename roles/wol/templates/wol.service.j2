@@ -1,0 +1,12 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[Unit]
+Description=Wake-on-LAN (paquet magique) sur {{ wol_interface }}
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ethtool -s {{ wol_interface }} wol g
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,52 @@
+---
+# Côté hyperviseur : la carte reste prête à recevoir le paquet magique,
+# même si le pilote réinitialise le réglage au démarrage.
+- name: Service d'activation du Wake-on-LAN
+  ansible.builtin.template:
+    src: wol.service.j2
+    dest: "/etc/systemd/system/wol-{{ wol_interface }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Wake-on-LAN activé à chaque démarrage
+  ansible.builtin.systemd_service:
+    name: "wol-{{ wol_interface }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Côté machine d'administration : la MAC est relevée ici, pendant que
+# l'hyperviseur est allumé, pour servir quand il ne l'est plus.
+- name: Répertoire de la MAC sur la machine d'administration
+  ansible.builtin.file:
+    path: "{{ wol_fichier_mac | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  delegate_to: "{{ wol_emetteur }}"
+
+- name: MAC de l'hyperviseur
+  ansible.builtin.copy:
+    content: "{{ ansible_facts[wol_interface].macaddress }}\n"
+    dest: "{{ wol_fichier_mac }}"
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: "{{ wol_emetteur }}"
+
+- name: Paquet wakeonlan
+  ansible.builtin.apt:
+    name: wakeonlan
+    state: present
+  delegate_to: "{{ wol_emetteur }}"
+
+- name: Commande reveil-pve
+  ansible.builtin.template:
+    src: reveil-pve.j2
+    dest: "{{ wol_commande }}"
+    owner: root
+    group: root
+    mode: "0755"
+  delegate_to: "{{ wol_emetteur }}"
