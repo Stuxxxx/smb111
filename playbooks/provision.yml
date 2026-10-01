@@ -118,7 +118,7 @@
         # Pas de cipassword : le compte ansible n'a pas de mot de passe
         # (cloud-init le verrouille), l'accès se fait uniquement par clé.
         ciuser: ansible
-        sshkeys: "{{ lookup('ansible.builtin.file', '~/.ssh/smb111.pub') }}"
+        sshkeys: "{{ lookup('ansible.builtin.file', '/etc/ansible/smb111.pub') }}"
         nameservers: "{{ '1.1.1.1' if item.name == 'fw' else passerelle_interne }}"
         ipconfig:
           ipconfig0: "ip={{ item.ip }}/24{{ ',gw=' ~ passerelle_interne if item.name != 'fw' else '' }}"

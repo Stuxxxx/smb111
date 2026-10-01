@@ -2,7 +2,7 @@
 # Compte d'automatisation : ni mot de passe, ni usage humain.
 compte_ansible_nom: ansible
 # Clé publique autorisée, lue sur la machine d'administration
-compte_ansible_cle: "{{ lookup('ansible.builtin.file', '~/.ssh/smb111.pub') }}"
+compte_ansible_cle: "{{ lookup('ansible.builtin.file', '/etc/ansible/smb111.pub') }}"
 # Seules provenances acceptées pour cette clé (option from= d'authorized_keys).
 # Ajouter l'adresse wg1 de rasb quand les VM internes seront jointes par le tunnel.
 compte_ansible_sources:
