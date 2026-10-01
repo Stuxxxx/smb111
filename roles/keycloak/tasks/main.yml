@@ -1,0 +1,164 @@
+---
+# --- Paquets ----------------------------------------------------------------
+- name: Paquets nécessaires
+  ansible.builtin.apt:
+    name:
+      - "{{ keycloak_java_package }}"
+      - postgresql
+      - python3-psycopg2      # modules community.postgresql
+      - acl                   # become_user: postgres depuis le compte ansible
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# --- Base de données --------------------------------------------------------
+- name: PostgreSQL démarré et activé au démarrage
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Utilisateur PostgreSQL de Keycloak
+  community.postgresql.postgresql_user:
+    name: "{{ keycloak_db_user }}"
+    password: "{{ keycloak_db_password }}"
+  become_user: postgres
+  no_log: true
+
+- name: Base de données de Keycloak
+  community.postgresql.postgresql_db:
+    name: "{{ keycloak_db_name }}"
+    owner: "{{ keycloak_db_user }}"
+    encoding: UTF8
+  become_user: postgres
+
+# --- Installation -----------------------------------------------------------
+- name: Compte système keycloak
+  ansible.builtin.user:
+    name: "{{ keycloak_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ keycloak_home }}"
+    create_home: false
+
+- name: Archive de Keycloak {{ keycloak_version }}
+  ansible.builtin.get_url:
+    url: "{{ keycloak_url }}"
+    dest: "{{ keycloak_install_dir }}/keycloak-{{ keycloak_version }}.tar.gz"
+    checksum: "sha1:{{ keycloak_url }}.sha1"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    keycloak_url: >-
+      https://github.com/keycloak/keycloak/releases/download/{{ keycloak_version
+      }}/keycloak-{{ keycloak_version }}.tar.gz
+
+- name: Extraction de l'archive
+  ansible.builtin.unarchive:
+    src: "{{ keycloak_install_dir }}/keycloak-{{ keycloak_version }}.tar.gz"
+    dest: "{{ keycloak_install_dir }}"
+    remote_src: true
+    owner: "{{ keycloak_user }}"
+    group: "{{ keycloak_user }}"
+    creates: "{{ keycloak_install_dir }}/keycloak-{{ keycloak_version }}/bin/kc.sh"
+
+- name: Lien vers la version active
+  ansible.builtin.file:
+    src: "{{ keycloak_install_dir }}/keycloak-{{ keycloak_version }}"
+    dest: "{{ keycloak_home }}"
+    state: link
+    force: true
+  notify: restart keycloak
+
+# --- Configuration ----------------------------------------------------------
+- name: Répertoire de configuration
+  ansible.builtin.file:
+    path: "{{ keycloak_conf_dir }}"
+    state: directory
+    owner: root
+    group: "{{ keycloak_user }}"
+    mode: "0750"
+
+- name: Certificat autosigné
+  when: keycloak_cert_autosigne | bool
+  block:
+    - name: Clé privée TLS
+      community.crypto.openssl_privatekey:
+        path: "{{ keycloak_key_file }}"
+        owner: root
+        group: "{{ keycloak_user }}"
+        mode: "0640"
+      notify: restart keycloak
+
+    - name: Demande de certificat
+      community.crypto.openssl_csr_pipe:
+        privatekey_path: "{{ keycloak_key_file }}"
+        common_name: "{{ keycloak_hostname | urlsplit('hostname') }}"
+        subject_alt_name:
+          - "DNS:{{ keycloak_hostname | urlsplit('hostname') }}"
+      register: keycloak_csr
+      changed_when: false
+
+    - name: Certificat TLS
+      community.crypto.x509_certificate:
+        path: "{{ keycloak_cert_file }}"
+        csr_content: "{{ keycloak_csr.csr }}"
+        privatekey_path: "{{ keycloak_key_file }}"
+        provider: selfsigned
+        owner: root
+        group: "{{ keycloak_user }}"
+        mode: "0644"
+      notify: restart keycloak
+
+- name: Fichier keycloak.conf
+  ansible.builtin.template:
+    src: keycloak.conf.j2
+    dest: "{{ keycloak_home }}/conf/keycloak.conf"
+    owner: root
+    group: "{{ keycloak_user }}"
+    mode: "0640"
+  no_log: true
+  notify: restart keycloak
+
+- name: Variables d'environnement du service
+  ansible.builtin.template:
+    src: keycloak.env.j2
+    dest: "{{ keycloak_conf_dir }}/keycloak.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: restart keycloak
+
+- name: Service systemd
+  ansible.builtin.template:
+    src: keycloak.service.j2
+    dest: /etc/systemd/system/keycloak.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart keycloak
+
+- name: Keycloak démarré et activé au démarrage
+  ansible.builtin.systemd_service:
+    name: keycloak
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Appliquer les redémarrages en attente
+  ansible.builtin.meta: flush_handlers
+
+# --- Vérification -----------------------------------------------------------
+# L'interface de gestion (port 9000) expose l'état de santé.
+- name: Attendre que Keycloak soit prêt
+  ansible.builtin.uri:
+    url: "https://localhost:9000/health/ready"
+    validate_certs: false
+  register: keycloak_health
+  until: keycloak_health.status | default(0) == 200
+  retries: 30
+  delay: 10
+  when: not ansible_check_mode

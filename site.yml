@@ -38,5 +38,12 @@
   roles:
     - compte_ansible
 
+- name: Fournisseur d'identité (SSO)
+  hosts: idp
+  become: true
+  roles:
+    - role: keycloak
+      tags: [keycloak]
+
 - name: Gestion des administrateurs
   import_playbook: admins.yml
