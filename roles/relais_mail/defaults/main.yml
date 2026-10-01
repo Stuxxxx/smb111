@@ -1,0 +1,5 @@
+---
+# Adresses d'écoute de Postfix : jamais l'interface externe
+relais_mail_ecoute: ["127.0.0.1", "{{ mail_relais_interne }}"]
+# Seules machines autorisées à envoyer : fw lui-même et le réseau interne
+relais_mail_reseaux: ["127.0.0.0/8", "{{ reseau_interne }}.0/24"]
