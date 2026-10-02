@@ -33,6 +33,16 @@ admin_sauvegarde_schedule: "*-*-* 02:00:00"
 # Les clones personnels (~/smb111) restent libres d'être sur une autre branche.
 admin_depot_auto: /var/lib/smb111/depot
 
+# Tâches programmées avec l'hyperviseur éteint la nuit : chaque tâche le
+# réveille (commande du rôle wol), attend les VM, puis le rééteint s'il
+# était éteint au départ. Activé machine par machine, dans host_vars/.
+admin_reveil_hyperviseur: false
+admin_reveil_hote: "{{ groups['proxmox'] | first }}"
+admin_reveil_commande: /usr/local/bin/reveil-pve
+admin_reveil_attente: 600       # secondes laissées aux VM pour répondre
+admin_avec_pve: /usr/local/bin/smb111-avec-pve
+admin_reveil_verrou: "{{ admin_depot_auto }}/.git/smb111-tache.lock"
+
 # Notifications par e-mail des administrateurs, envoyées directement par le
 # service d'envoi (group_vars/all/mail.yml) : elles partent même si pve ou fw
 # sont arrêtés. Destinataires : les admins de Keycloak (group_vars/all/mail.yml).
