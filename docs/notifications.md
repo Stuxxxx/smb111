@@ -61,23 +61,31 @@ du vault, déjà utilisé par le relais de `fw`). Ils ne dépendent donc ni de `
 Chaque service programmé déclare `OnFailure=notification-echec@%n.service` : en cas d'échec,
 les admins reçoivent la fin du journal du service (et le rapport de conformité pour `check`).
 
-### Choisir les destinataires
+### Qui reçoit les e-mails
 
-Les adresses des personnes sont des données personnelles : elles vont **dans le vault**, jamais
-en clair dans ce dépôt public.
+**Les membres actifs du groupe `admins` de Keycloak** (realm `smb111`) qui ont une adresse
+e-mail. Être admin du SSO et être prévenu des incidents vont donc de pair : ajouter quelqu'un
+au groupe l'abonne, le retirer ou bloquer son compte le désabonne.
 
 ```bash
-ansible-vault edit group_vars/all/vault.yml
+ansible-playbook site.yml --limit idp --tags comptes -e "nom=alice email=alice@exemple.org groupes=admins"
 ```
 
-```yaml
-vault_notification_destinataires:
-  - premiere.personne@exemple.org
-  - deuxieme.personne@exemple.org
-```
+La liste est relevée **sur `idp`** (l'API d'administration de Keycloak n'est pas ouverte à
+`rasb`), puis écrite dans `/etc/smb111/destinataires` sur `rasb` :
 
-Puis : `ansible-playbook site.yml --limit rasb`. Sans cette variable, les notifications vont à
-la boîte du compte d'envoi lui-même.
+- à chaque passage du rôle `keycloak_comptes` (`--tags comptes`), donc après toute gestion de
+  compte en ligne de commande ;
+- chaque nuit par `sauvegarde.yml`, pour suivre aussi les changements faits dans la console.
+
+Les adresses ne passent jamais par ce dépôt public. Si Keycloak ne répond pas, l'ancienne liste
+reste en place. Tant qu'aucune liste n'a été relevée, ou si le groupe est vide, les e-mails vont
+à la boîte du compte d'envoi.
+
+```bash
+ansible-playbook site.yml --limit idp --tags comptes     # relève la liste, affiche les admins prévenus
+sudo cat /etc/smb111/destinataires                       # sur rasb
+```
 
 ### Tester
 

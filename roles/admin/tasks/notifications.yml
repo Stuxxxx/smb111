@@ -29,17 +29,19 @@
     mode: "0640"
   no_log: true
 
-- name: Destinataires des notifications
+# La vraie liste (les admins de Keycloak) est écrite par le rôle keycloak_comptes :
+# ici, seulement un point de départ si le fichier n'existe pas encore.
+- name: Destinataires des notifications, en attendant la liste de Keycloak
   ansible.builtin.copy:
     content: |
-      # Géré par Ansible — notification_destinataires (group_vars/all/mail.yml)
-      {% for d in notification_destinataires %}
-      {{ d }}
-      {% endfor %}
+      # Provisoire : remplacé par les admins de Keycloak au prochain passage
+      # de keycloak_comptes (ansible-playbook site.yml --limit idp --tags comptes)
+      {{ notification_destinataire_secours }}
     dest: "{{ admin_notification_destinataires }}"
     owner: root
     group: admins
     mode: "0640"
+    force: false
   no_log: true
 
 - name: Commandes d'envoi
