@@ -1,0 +1,64 @@
+---
+# Export de la base de Keycloak sur idp, vérifié, puis rapatrié sur rasb.
+# Inclus par sauvegarde.yml et restauration.yml (sauvegarde de sécurité).
+#
+# Entrée  : sauvegarde_dir (group_vars/all/sauvegarde.yml)
+# Sortie  : export_fichier (nom du fichier), présent sur idp et sur rasb
+
+- name: Dossier des sauvegardes sur la VM
+  ansible.builtin.file:
+    path: "{{ export_dossier_vm }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0700"
+
+# Le nom porte la version : une base ne se restaure que sous la même version,
+# Keycloak la migrant au démarrage sans retour possible.
+- name: Version de Keycloak en service
+  ansible.builtin.command: readlink -f /opt/keycloak
+  register: export_kc_lien
+  changed_when: false
+
+- name: Nom de la sauvegarde
+  ansible.builtin.set_fact:
+    export_fichier: >-
+      keycloak_{{ now(fmt='%Y-%m-%d_%H%M%S') }}_{{ export_kc_lien.stdout | basename | replace('keycloak-', '') }}{{ export_suffixe | default('') }}.dump
+
+# pg_dump lit un instantané cohérent : Keycloak peut rester en service
+- name: Export de la base (pg_dump, format personnalisé compressé)
+  ansible.builtin.command:
+    argv:
+      - pg_dump
+      - --format=custom
+      - --file={{ export_dossier_vm }}/{{ export_fichier }}
+      - keycloak
+  become_user: postgres
+  changed_when: true
+
+- name: La sauvegarde est lisible
+  ansible.builtin.command:
+    argv: [pg_restore, --list, "{{ export_dossier_vm }}/{{ export_fichier }}"]
+  become_user: postgres
+  changed_when: false
+
+- name: Dossier de idp sur rasb
+  ansible.builtin.file:
+    path: "{{ sauvegarde_dir }}/{{ inventory_hostname }}"
+    state: directory
+    mode: "0770"
+  delegate_to: localhost
+  become: false
+
+- name: Rapatriement sur rasb
+  ansible.builtin.fetch:
+    src: "{{ export_dossier_vm }}/{{ export_fichier }}"
+    dest: "{{ sauvegarde_dir }}/{{ inventory_hostname }}/"
+    flat: true
+
+- name: Droits de la copie sur rasb
+  ansible.builtin.file:
+    path: "{{ sauvegarde_dir }}/{{ inventory_hostname }}/{{ export_fichier }}"
+    mode: "0640"
+  delegate_to: localhost
+  become: false

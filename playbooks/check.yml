@@ -18,6 +18,8 @@
 #   check_rapports_dir           dossier des rapports                  (défaut : /var/log/smb111)
 #   check_retention_jours        conservation des rapports, en jours   (défaut : 30)
 #   check_echec_si_non_conforme  code retour ≠ 0 si un hôte est KO     (défaut : false)
+#   check_sauvegardes            sauvegardes attendues sur l'hôte : [{nom, dossier, motif}]
+#   check_sauvegarde_heures      âge maximal de la plus récente         (défaut : 26)
 
 - name: Contrôles de conformité
   hosts: all
@@ -36,6 +38,7 @@
       - horloge
       - wireguard
       - certificats
+      - sauvegarde
 
     # Les administrateurs déclarés dans le dépôt sont légitimes par construction.
     comptes_autorises: >-
@@ -183,6 +186,21 @@
       failed_when: false
       when: wg_enabled | default(false) | bool
 
+    # --- Sauvegardes ---------------------------------------------------------
+    # Au moins un fichier non vide plus récent que le seuil, par sauvegarde attendue
+    - name: Sauvegardes récentes
+      ansible.builtin.find:
+        paths: "{{ item.dossier }}"
+        patterns: "{{ item.motif }}"
+        age: "-{{ check_sauvegarde_heures | default(26) }}h"
+        size: "1k"
+      become: true
+      register: sauvegardes_etat
+      failed_when: false
+      loop: "{{ check_sauvegardes | default([]) }}"
+      loop_control:
+        label: "{{ item.nom }}"
+
     # --- Synthèse -----------------------------------------------------------
     - name: Synthèse des contrôles
       ansible.builtin.set_fact:
@@ -237,6 +255,14 @@
                        if wg_state.rc | default(1) != 0
                        else (wg_pairs_actifs | length | string) ~ '/' ~ (wg_pairs | length | string)
                             ~ ' pair(s) avec un handshake récent') }}
+          sauvegarde:
+            ok: "{{ sauvegardes_ko | length == 0 }}"
+            detail: >-
+              {{ ('aucune sauvegarde de moins de ' ~ (check_sauvegarde_heures | default(26) | string)
+                  ~ ' h : ' ~ sauvegardes_ko | join(', '))
+                 if sauvegardes_ko
+                 else ((check_sauvegardes | default([]) | length | string) ~ ' sauvegarde(s) à jour'
+                       if check_sauvegardes | default([]) else 'aucune sauvegarde attendue ici') }}
           certificats:
             ok: "{{ pki_racine.stat.exists and certificats_ko | length == 0 }}"
             detail: >-
@@ -280,6 +306,10 @@
         certificats_ko: >-
           {{ certificats_etat.stdout_lines | default([]) | select('match', '^KO ')
              | map('regex_replace', '^KO ', '') | list }}
+        # Sans fichier trouvé, ou dossier absent (find en échec, pas de « files »)
+        sauvegardes_ko: >-
+          {{ sauvegardes_etat.results | default([]) | rejectattr('files')
+             | map(attribute='item.nom') | list }}
         f2b: >-
           {{ ansible_facts.services['fail2ban.service']
              | default({'state': 'absent', 'status': 'absent'}) }}

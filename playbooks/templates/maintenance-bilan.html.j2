@@ -1,0 +1,136 @@
+{#- Bilan de maintenance envoyé aux administrateurs (playbooks/maintenance.yml).
+    HTML d'e-mail : tableaux et styles en ligne, seuls compris par tous les
+    clients (Gmail, Outlook, mobiles). Variables : bilan_hotes, bilan_attente,
+    bilan_date, bilan_total_paquets, bilan_redemarres. -#}
+{%- set statut = {
+  'aucun':   {'libelle': 'À jour',                 'fond': '#ecfdf5', 'texte': '#047857', 'point': '#10b981'},
+  'fait':    {'libelle': 'Redémarré',              'fond': '#eff6ff', 'texte': '#1d4ed8', 'point': '#3b82f6'},
+  'attente': {'libelle': 'Redémarrage à faire',    'fond': '#fffbeb', 'texte': '#b45309', 'point': '#f59e0b'},
+  'absent':  {'libelle': 'Non traité',             'fond': '#fef2f2', 'texte': '#b91c1c', 'point': '#ef4444'},
+} -%}
+{%- set ok = not bilan_attente and (bilan_hotes | selectattr('redemarrage', 'equalto', 'absent') | list | length == 0) -%}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Rapport de maintenance SMB111</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+{{ bilan_hotes | length }} machine(s), {{ bilan_total_paquets }} paquet(s) mis à jour{{ ', ' ~ (bilan_attente | length) ~ ' redémarrage(s) à faire' if bilan_attente else ', tout est à jour' }}.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f7;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+
+  <!-- En-tête -->
+  <tr><td style="background:#0f172a;background-image:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#134e4a 100%);border-radius:16px 16px 0 0;padding:32px 36px 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#5eead4;">SMB111 · Maintenance du parc</td>
+      <td align="right" style="font-size:12px;color:#94a3b8;">{{ bilan_date }}</td>
+    </tr></table>
+    <div style="font-size:28px;line-height:34px;font-weight:700;color:#ffffff;margin:18px 0 6px;">
+      {{ 'Tout est à jour' if ok else ((bilan_attente | length) ~ ' redémarrage' ~ ('s' if bilan_attente | length > 1 else '') ~ ' à prévoir' if bilan_attente else 'Maintenance incomplète') }}
+    </div>
+    <div style="font-size:15px;line-height:22px;color:#cbd5e1;">
+      {%- if ok %}Toutes les machines ont été mises à jour et tournent sur leurs derniers paquets.
+      {%- elif bilan_attente %}Les mises à jour sont installées. Certaines machines attendent un redémarrage manuel pour les appliquer entièrement.
+      {%- else %}Certaines machines n'ont pas été traitées : voir le détail ci-dessous.{% endif %}
+    </div>
+  </td></tr>
+
+  <!-- Chiffres clés -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      {%- for valeur, libelle, couleur in [
+            (bilan_hotes | length, 'machines', '#0f172a'),
+            (bilan_total_paquets, 'paquets mis à jour', '#0f766e'),
+            (bilan_redemarres, 'redémarrées', '#1d4ed8'),
+            (bilan_attente | length, 'en attente', '#b45309' if bilan_attente else '#94a3b8')] %}
+      <td width="25%" align="center" style="padding:0 4px;">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 6px;">
+          <div style="font-size:28px;line-height:32px;font-weight:700;color:{{ couleur }};">{{ valeur }}</div>
+          <div style="font-size:12px;line-height:16px;color:#64748b;margin-top:4px;">{{ libelle }}</div>
+        </div>
+      </td>
+      {%- endfor %}
+    </tr></table>
+  </td></tr>
+
+  {%- if bilan_attente %}
+  <!-- À faire -->
+  <tr><td style="background:#ffffff;padding:16px 28px 0;">
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:10px;padding:16px 18px;">
+      <div style="font-size:14px;font-weight:700;color:#92400e;margin-bottom:8px;">À faire à la main, à un moment annoncé</div>
+      {%- for h in bilan_attente %}
+      <div style="font-size:13px;line-height:20px;color:#78350f;margin-top:6px;">
+        <strong>{{ h.nom }}</strong> —
+        {%- if h.groupe == 'proxmox' %} tout le SI s'arrête quelques minutes, les VM repartent seules
+        {%- elif h.groupe == 'admin' %} la session SSH sera coupée
+        {%- else %} le service de la machine sera coupé pendant le redémarrage{% endif %}
+        <div style="font-family:Consolas,'SFMono-Regular',Menlo,monospace;font-size:12px;background:#ffffff;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-top:4px;color:#0f172a;">{{ 'sudo reboot' if h.groupe == 'admin' else 'ssh ' ~ h.nom ~ ' sudo reboot' }}</div>
+      </div>
+      {%- endfor %}
+    </div>
+  </td></tr>
+  {%- endif %}
+
+  <!-- Machines -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:12px;">Détail par machine</div>
+    {%- for h in bilan_hotes %}
+    {%- set s = statut[h.redemarrage] %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;">
+      <tr><td style="padding:16px 18px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td valign="top">
+            <div style="font-size:17px;font-weight:700;color:#0f172a;">{{ h.nom }}</div>
+            <div style="font-size:13px;color:#64748b;margin-top:2px;">{{ h.description }}{{ ' · ' ~ h.systeme if h.systeme else '' }}</div>
+          </td>
+          <td valign="top" align="right" style="white-space:nowrap;">
+            <span style="display:inline-block;background:{{ s.fond }};color:{{ s.texte }};font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;">
+              <span style="color:{{ s.point }};">●</span>&nbsp;{{ s.libelle }}
+            </span>
+          </td>
+        </tr></table>
+        {%- if h.redemarrage != 'absent' %}
+        <div style="font-size:13px;color:#334155;margin-top:12px;">
+          {%- if h.paquets %}<strong style="color:#0f172a;">{{ h.paquets | length }}</strong> paquet{{ 's' if h.paquets | length > 1 else '' }} mis à jour
+          {%- else %}Aucun paquet à mettre à jour{% endif %}
+          {%- if h.duree is not none %} &nbsp;·&nbsp; {{ (h.duree // 60) ~ ' min ' ~ '%02d' | format(h.duree % 60) ~ ' s' if h.duree >= 60 else h.duree ~ ' s' }}{% endif %}
+        </div>
+        {%- if h.paquets %}
+        <div style="margin-top:10px;line-height:26px;">
+          {%- for p in h.paquets[:24] %}<span style="display:inline-block;font-family:Consolas,'SFMono-Regular',Menlo,monospace;font-size:11px;color:#334155;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:1px 7px;margin:0 4px 0 0;">{{ p }}</span>{% endfor %}
+          {%- if h.paquets | length > 24 %}<span style="font-size:12px;color:#64748b;">&nbsp;et {{ h.paquets | length - 24 }} autres</span>{% endif %}
+        </div>
+        {%- endif %}
+        {%- else %}
+        <div style="font-size:13px;color:#b91c1c;margin-top:12px;">Machine non traitée : injoignable, ou maintenance interrompue avant elle.</div>
+        {%- endif %}
+      </td></tr>
+    </table>
+    {%- endfor %}
+  </td></tr>
+
+  <!-- Pied -->
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 28px 24px;">
+    <div style="font-size:12px;line-height:19px;color:#64748b;">
+      Les VM redémarrent d'elles-mêmes si une mise à jour l'exige ; <strong>rasb</strong> et
+      <strong>pve</strong> jamais, pour ne pas couper l'administration ni tout le SI.
+      Le contrôle de conformité de 06:00 rappelle chaque jour les redémarrages en attente.
+    </div>
+    <div style="font-size:12px;line-height:19px;color:#94a3b8;margin-top:10px;">
+      Envoyé par <span style="font-family:Consolas,Menlo,monospace;">playbooks/maintenance.yml</span> depuis rasb ·
+      <a href="https://github.com/Stuxxxx/smb111" style="color:#0f766e;text-decoration:none;">Stuxxxx/smb111</a> ·
+      vous le recevez en tant que membre du groupe admins de Keycloak.
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

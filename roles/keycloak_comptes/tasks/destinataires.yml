@@ -1,0 +1,85 @@
+---
+# Destinataires des notifications des administrateurs (docs/notifications.md) :
+# les membres actifs du groupe kc_groupe_admin qui ont une adresse e-mail.
+# La liste est relevée ici, sur idp (l'API n'est pas ouverte à rasb), puis
+# écrite sur la machine d'administration, qui envoie les notifications.
+# Les adresses ne passent jamais par le dépôt.
+#
+# Appelé à chaque passage du rôle (après une gestion de compte) et chaque nuit
+# par playbooks/sauvegarde.yml. Si Keycloak ne répond pas, l'ancienne liste
+# reste en place : les notifications continuent de partir.
+
+- name: Destinataires des notifications des administrateurs
+  block:
+    - name: Jeton d'administration
+      ansible.builtin.uri:
+        url: "{{ kc_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ kc_compte_ansible }}"
+          password: "{{ kc_compte_ansible_mdp }}"
+        validate_certs: false
+      register: kc_jeton
+      no_log: true
+
+    - name: Groupe {{ kc_groupe_admin }}
+      ansible.builtin.uri:
+        url: "{{ kc_url }}/admin/realms/{{ kc_realm }}/groups?search={{ kc_groupe_admin }}&exact=true"
+        headers:
+          Authorization: "Bearer {{ kc_jeton.json.access_token }}"
+        validate_certs: false
+      register: kc_groupe_admins
+
+    - name: Membres du groupe {{ kc_groupe_admin }}
+      ansible.builtin.uri:
+        url: "{{ kc_url }}/admin/realms/{{ kc_realm }}/groups/{{ kc_groupe_id }}/members?max=1000"
+        headers:
+          Authorization: "Bearer {{ kc_jeton.json.access_token }}"
+        validate_certs: false
+      register: kc_membres_admins
+      no_log: true             # adresses e-mail des personnes
+      vars:
+        kc_groupe_id: >-
+          {{ (kc_groupe_admins.json | selectattr('name', 'equalto', kc_groupe_admin) | first).id }}
+
+    # Comptes bloqués (actif=false) ou sans adresse : pas de notification
+    - name: Administrateurs à prévenir
+      ansible.builtin.set_fact:
+        kc_admins_notifies: >-
+          {{ kc_membres_admins.json | selectattr('enabled') | selectattr('email', 'defined')
+             | rejectattr('email', 'equalto', '') | list }}
+      no_log: true
+
+    - name: Liste écrite sur la machine d'administration
+      ansible.builtin.copy:
+        content: |
+          # Géré par Ansible — membres actifs du groupe {{ kc_groupe_admin }} de Keycloak (realm {{ kc_realm }})
+          {% for u in kc_admins_notifies %}
+          {{ u.email }}
+          {% else %}
+          # aucun : boîte du compte d'envoi
+          {{ notification_destinataire_secours }}
+          {% endfor %}
+        dest: "{{ notification_destinataires_fichier }}"
+        owner: root
+        group: admins
+        mode: "0640"
+      delegate_to: "{{ groups['admin'] | first }}"
+      become: true
+      no_log: true
+
+    - name: Administrateurs prévenus par e-mail
+      ansible.builtin.debug:
+        msg: >-
+          {{ kc_admins_notifies | length }} administrateur(s) :
+          {{ kc_admins_notifies | map(attribute='username') | join(', ') or 'aucun, boîte du compte d envoi' }}
+
+  rescue:
+    - name: Liste des destinataires inchangée
+      ansible.builtin.debug:
+        msg: >-
+          Destinataires des notifications non relevés dans Keycloak
+          ({{ ansible_failed_result.msg | default('erreur') }}) : l'ancienne liste reste en place.

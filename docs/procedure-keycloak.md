@@ -105,7 +105,7 @@ Les personnes n'ont **pas** de compte dans `master` : les membres du groupe `adm
 
 ## Mettre à jour Keycloak
 
-1. Sauvegarder la base (commande dans `utilisation-idp.md`, section 4).
+1. Sauvegarder la base : `ansible-playbook playbooks/sauvegarde.yml` ([`sauvegarde.md`](sauvegarde.md)).
 2. Ajouter `keycloak_version: "x.y.z"` dans `host_vars/idp/main.yml`, puis Pull Request.
 3. `ansible-playbook site.yml --limit idp --tags keycloak`
 
@@ -117,5 +117,6 @@ d'où la sauvegarde.
 ## Reste à faire
 
 - Ouvrir Keycloak aux utilisateurs hors WireGuard (redirection du port 443 sur `fw`).
-- Remplacer le certificat autosigné par un certificat de la PKI du projet.
-- Programmer les sauvegardes de la base et les copier hors de la VM.
+
+Fait : certificat émis par la PKI du SI ([`pki.md`](pki.md)) ; sauvegarde nocturne rapatriée
+sur `rasb` ([`sauvegarde.md`](sauvegarde.md)).

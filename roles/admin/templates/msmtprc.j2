@@ -1,0 +1,19 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Envoi des notifications des administrateurs, directement par le service
+# d'envoi : rasb est hors de l'hyperviseur et doit pouvoir prévenir même
+# quand pve ou fw sont arrêtés.
+defaults
+auth on
+tls on
+tls_starttls on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+syslog LOG_MAIL
+
+account projet
+host {{ mail_service_hote }}
+port {{ mail_service_port }}
+user {{ mail_service_utilisateur }}
+password "{{ mail_service_mdp | replace("\\", "\\\\") | replace("\"", "\\\"") }}"
+from {{ mail_expediteur }}
+
+account default : projet

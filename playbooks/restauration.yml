@@ -1,0 +1,162 @@
+---
+# Restauration de la base de Keycloak depuis une sauvegarde de rasb
+# (docs/sauvegarde.md). Une sauvegarde de sécurité de l'état actuel est faite
+# avant d'écraser quoi que ce soit.
+#
+#   ansible-playbook playbooks/restauration.yml                      # liste les sauvegardes
+#   ansible-playbook playbooks/restauration.yml -e fichier=keycloak_2026-10-03_020112_26.4.0.dump
+#   ... -e confirmer=oui                                              # sans question (démonstration)
+#
+# Keycloak est arrêté pendant l'opération (une à deux minutes). La base n'est
+# restaurée que sous la version de Keycloak qui l'a produite (-e forcer=true
+# pour passer outre, à ses risques : Keycloak migre la base au démarrage).
+
+- name: Restauration de Keycloak
+  hosts: idp
+  become: true
+  gather_facts: false
+
+  vars:
+    fichier: ""
+    confirmer: ""
+    forcer: false
+    export_dossier_vm: /var/backups/keycloak
+    dossier_rasb: "{{ sauvegarde_dir }}/{{ inventory_hostname }}"
+
+  tasks:
+    - name: Sauvegardes disponibles sur rasb
+      ansible.builtin.find:
+        paths: "{{ dossier_rasb }}"
+        patterns: "keycloak_*.dump"
+      register: disponibles
+      delegate_to: localhost
+      become: false
+
+    - name: Choisir une sauvegarde
+      when: fichier | length == 0
+      block:
+        - name: Les 15 plus récentes
+          ansible.builtin.debug:
+            msg: >-
+              {{ disponibles.files | sort(attribute='mtime', reverse=true)
+                 | map(attribute='path') | map('basename') | list | batch(15) | first | default([]) }}
+
+        - name: Relancer avec la sauvegarde choisie
+          ansible.builtin.debug:
+            msg: "ansible-playbook playbooks/restauration.yml -e fichier=<nom>"
+
+        - name: Fin
+          ansible.builtin.meta: end_play
+
+    - name: La sauvegarde existe sur rasb
+      ansible.builtin.assert:
+        that: fichier in (disponibles.files | map(attribute='path') | map('basename') | list)
+        fail_msg: "{{ fichier }} introuvable dans {{ dossier_rasb }} (sans -e fichier : liste des sauvegardes)"
+        quiet: true
+
+    - name: Version de Keycloak en service
+      ansible.builtin.command: readlink -f /opt/keycloak
+      register: kc_lien
+      changed_when: false
+
+    - name: La sauvegarde vient de la même version de Keycloak
+      ansible.builtin.assert:
+        that: forcer | bool or version_sauvegarde == version_en_service
+        fail_msg: >-
+          Sauvegarde produite par Keycloak {{ version_sauvegarde }}, en service : {{ version_en_service }}.
+          Remettre la même version (keycloak_version), ou -e forcer=true à ses risques.
+        quiet: true
+      vars:
+        version_sauvegarde: "{{ fichier | regex_replace('^keycloak_[0-9-]+_[0-9]+_(.+?)(_[a-z-]+)?\\.dump$', '\\1') }}"
+        version_en_service: "{{ kc_lien.stdout | basename | replace('keycloak-', '') }}"
+
+    - name: Confirmation
+      ansible.builtin.pause:
+        prompt: >-
+          Restaurer {{ fichier }} sur {{ inventory_hostname }} ? Les comptes créés depuis
+          seront perdus (une sauvegarde de sécurité est faite avant). Taper « oui »
+      register: reponse
+      when: confirmer != 'oui'
+
+    - name: Restauration confirmée
+      ansible.builtin.assert:
+        that: confirmer == 'oui' or reponse.user_input | default('') == 'oui'
+        fail_msg: Restauration annulée.
+        quiet: true
+
+    # --- Filet : l'état actuel est sauvegardé avant d'être écrasé ------------
+    - name: Sauvegarde de sécurité de l'état actuel
+      ansible.builtin.import_tasks: taches/export-keycloak.yml
+      vars:
+        export_suffixe: _avant-restauration
+
+    - name: Envoi de la sauvegarde choisie sur la VM
+      ansible.builtin.copy:
+        src: "{{ dossier_rasb }}/{{ fichier }}"
+        dest: "{{ export_dossier_vm }}/restauration.dump"
+        owner: postgres
+        group: postgres
+        mode: "0600"
+
+    - name: Restauration
+      block:
+        - name: Arrêt de Keycloak
+          ansible.builtin.systemd_service:
+            name: keycloak
+            state: stopped
+
+        # Une seule transaction : en cas d'erreur, la base reste telle qu'avant
+        - name: Restauration de la base
+          ansible.builtin.command:
+            argv:
+              - pg_restore
+              - --clean
+              - --if-exists
+              - --single-transaction
+              - --exit-on-error
+              - --dbname=keycloak
+              - "{{ export_dossier_vm }}/restauration.dump"
+          become_user: postgres
+          changed_when: true
+
+      always:
+        - name: Redémarrage de Keycloak
+          ansible.builtin.systemd_service:
+            name: keycloak
+            state: started
+
+        - name: Fichier de restauration retiré
+          ansible.builtin.file:
+            path: "{{ export_dossier_vm }}/restauration.dump"
+            state: absent
+
+    - name: Keycloak est prêt
+      ansible.builtin.uri:
+        url: "https://localhost:9000/health/ready"
+        validate_certs: false
+      register: sante
+      until: sante.status | default(0) == 200
+      retries: 30
+      delay: 10
+
+    - name: Prévenir les administrateurs
+      ansible.builtin.command:
+        argv:
+          - /usr/local/bin/smb111-notifier
+          - "Keycloak restauré depuis {{ fichier }}"
+        stdin: |
+          La base de Keycloak ({{ inventory_hostname }}) a été restaurée le {{ now(fmt='%d/%m/%Y à %H:%M') }}
+          depuis {{ fichier }}.
+
+          L'état précédent est conservé dans {{ dossier_rasb }}/{{ export_fichier }}.
+          Les comptes créés ou modifiés entre ces deux dates sont à refaire.
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      ignore_errors: true
+
+    - name: Résumé
+      ansible.builtin.debug:
+        msg:
+          - "Restauré : {{ fichier }}"
+          - "État précédent : {{ dossier_rasb }}/{{ export_fichier }}"

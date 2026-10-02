@@ -210,3 +210,7 @@
         username: "{{ kc_compte_demarrage }}"
         state: absent
       when: kc_supprimer_demarrage | bool
+
+# --- Destinataires des notifications : les membres du groupe admins ---------
+- name: Destinataires des notifications des administrateurs
+  ansible.builtin.import_tasks: destinataires.yml

@@ -172,8 +172,11 @@ console → *Users* → la personne → *Unlock*.
 | Redémarrer Keycloak | depuis `rasb` : `ansible idp -b -a 'systemctl restart keycloak'` |
 
 **Sauvegarde** : les comptes et les mots de passe sont dans la base de la VM, pas dans le
-dépôt. Avant toute intervention lourde, depuis `rasb` :
+dépôt. Elle est sauvegardée chaque nuit et rapatriée sur `rasb`. Avant toute intervention
+lourde, en faire une de plus, depuis `rasb` :
 
 ```bash
-ansible idp -b -m shell -a 'sudo -u postgres pg_dump -Fc keycloak > /var/backups/keycloak_$(date +%F).dump'
+ansible-playbook playbooks/sauvegarde.yml
 ```
+
+Restauration et détails : [`sauvegarde.md`](sauvegarde.md).

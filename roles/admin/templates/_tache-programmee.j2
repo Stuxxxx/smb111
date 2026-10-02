@@ -1,0 +1,20 @@
+{# Corps commun des services lancés par un timer : copie du dépôt réalignée
+   sur la branche de référence, puis notification des admins en cas d'échec.
+   Variables : tache_description, tache_commande #}
+[Unit]
+Description={{ tache_description }}
+After=network-online.target
+Wants=network-online.target
+{% if admin_notifications_enabled %}
+OnFailure=notification-echec@%n.service
+{% endif %}
+
+[Service]
+Type=oneshot
+User={{ admin_pull_user }}
+WorkingDirectory={{ admin_depot_auto }}
+Environment=PATH={{ [admin_ansible_bin, '/usr/local/bin', '/usr/bin', '/bin'] | unique | join(':') }}
+# Toujours l'état fusionné de {{ admin_repo_branch }}, jamais une branche en cours
+ExecStartPre=/usr/bin/git -C {{ admin_depot_auto }} fetch --quiet origin {{ admin_repo_branch }}
+ExecStartPre=/usr/bin/git -C {{ admin_depot_auto }} reset --hard --quiet FETCH_HEAD
+ExecStart={{ tache_commande }}

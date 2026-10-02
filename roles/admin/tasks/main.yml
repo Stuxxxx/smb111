@@ -2,6 +2,39 @@
 - name: Installation partagée d'Ansible
   ansible.builtin.import_tasks: ansible.yml
 
+- name: Notifications par e-mail des administrateurs
+  ansible.builtin.import_tasks: notifications.yml
+  when: admin_notifications_enabled | bool
+
+# Les tâches programmées n'utilisent pas un clone personnel, qui peut être sur
+# une branche en cours : elles ont le leur, réaligné sur la branche de
+# référence avant chaque exécution (ExecStartPre des services).
+- name: Répertoire de la copie automatique du dépôt
+  ansible.builtin.file:
+    path: "{{ admin_depot_auto | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Dossier de la copie automatique, au compte qui exécute les tâches
+  ansible.builtin.file:
+    path: "{{ admin_depot_auto }}"
+    state: directory
+    owner: "{{ admin_pull_user }}"
+    group: "{{ admin_pull_user }}"
+    mode: "0755"
+
+- name: Copie du dépôt pour les tâches programmées
+  ansible.builtin.git:
+    repo: "{{ admin_repo_url }}"
+    dest: "{{ admin_depot_auto }}"
+    version: "{{ admin_repo_branch }}"
+    force: true
+  become: true
+  become_user: "{{ admin_pull_user }}"
+  when: admin_maintenance_enabled or admin_check_enabled or admin_sauvegarde_enabled
+
 - name: Service ansible-pull
   ansible.builtin.template:
     src: ansible-pull.service.j2
@@ -65,6 +98,40 @@
     state: "{{ 'started' if admin_maintenance_enabled else 'stopped' }}"
     enabled: "{{ admin_maintenance_enabled }}"
     daemon_reload: true
+
+- name: Service de sauvegarde
+  ansible.builtin.template:
+    src: sauvegarde.service.j2
+    dest: /etc/systemd/system/sauvegarde.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Timer de sauvegarde
+  ansible.builtin.template:
+    src: sauvegarde.timer.j2
+    dest: /etc/systemd/system/sauvegarde.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+# En --check, l'unité n'est pas réellement écrite : systemd ne la connaît pas encore
+- name: Activer ou désactiver le timer de sauvegarde
+  ansible.builtin.systemd_service:
+    name: sauvegarde.timer
+    state: "{{ 'started' if admin_sauvegarde_enabled else 'stopped' }}"
+    enabled: "{{ admin_sauvegarde_enabled }}"
+    daemon_reload: true
+  when: not ansible_check_mode
+
+# setgid : les sauvegardes déposées par un admin restent au groupe admins
+- name: Dossier des sauvegardes
+  ansible.builtin.file:
+    path: "{{ sauvegarde_dir }}"
+    state: directory
+    owner: root
+    group: admins
+    mode: "2770"
 
 - name: Dossier des rapports de contrôle
   ansible.builtin.file:

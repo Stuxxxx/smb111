@@ -1,10 +1,21 @@
 ---
-# Mise à jour complète du parc, une machine à la fois.
-# Les nœuds Kubernetes sont vidés avant et remis en service après.
+# Mise à jour complète du parc, une machine à la fois, puis bilan par e-mail
+# aux administrateurs. Les nœuds Kubernetes sont vidés avant et remis en
+# service après.
 #
 #   ansible-playbook playbooks/maintenance.yml
-#   ansible-playbook playbooks/maintenance.yml --limit rasb
+#   ansible-playbook playbooks/maintenance.yml --limit idp
 #   ansible-playbook playbooks/maintenance.yml -e maintenance_reboot=false
+#   ansible-playbook playbooks/maintenance.yml -e maintenance_notifier=false
+#
+# Redémarrages : seules les VM redémarrent d'elles-mêmes. Ne redémarrent
+# jamais automatiquement (maintenance_sans_redemarrage) :
+#   - rasb, qui exécute ce playbook : Ansible refuse de redémarrer le nœud de
+#     contrôle, la tâche échouait et arrêtait la maintenance de tout le parc ;
+#   - pve, qui porte toutes les VM : le redémarrer coupe tout le SI d'un coup,
+#     cluster compris, ce qui annule l'intérêt du drain nœud par nœud.
+# Leur redémarrage en attente figure dans le bilan, et check.yml le signale
+# chaque jour : il se fait à la main, à un moment annoncé.
 
 - name: Maintenance du parc
   hosts: all
@@ -14,8 +25,21 @@
 
   vars:
     maintenance_reboot: true
+    maintenance_sans_redemarrage: "{{ groups.get('admin', []) + groups.get('proxmox', []) }}"
 
   tasks:
+    - name: Début de la maintenance de la machine
+      ansible.builtin.set_fact:
+        maintenance_debut: "{{ now().timestamp() | int }}"
+
+    - name: Paquets à mettre à jour
+      ansible.builtin.command: apt-get --simulate dist-upgrade
+      environment:
+        LC_ALL: C
+      register: apt_prevision
+      changed_when: false
+      check_mode: false
+
     - name: Retirer le nœud du cluster (drain)
       ansible.builtin.command:
         cmd: >
@@ -40,9 +64,11 @@
     - name: Redémarrer
       ansible.builtin.reboot:
         reboot_timeout: 600
-      when:
-        - reboot_required.stat.exists
-        - maintenance_reboot | bool
+      when: redemarrage_autorise
+      vars:
+        redemarrage_autorise: >-
+          {{ reboot_required.stat.exists and maintenance_reboot | bool
+             and inventory_hostname not in maintenance_sans_redemarrage }}
 
     - name: Attendre que les services soient repartis
       ansible.builtin.service_facts:
@@ -55,13 +81,134 @@
       when: inventory_hostname in groups.get('k3s', [])
       changed_when: true
 
+    - name: Bilan de la machine
+      ansible.builtin.set_fact:
+        maintenance_bilan:
+          paquets: "{{ paquets }}"
+          # aucun | fait | attente
+          redemarrage: >-
+            {{ 'aucun' if not reboot_required.stat.exists
+               else ('fait' if inventory_hostname not in maintenance_sans_redemarrage
+                              and maintenance_reboot | bool
+                     else 'attente') }}
+          duree: "{{ now().timestamp() | int - maintenance_debut | int }}"
+          systeme: >-
+            {{ (ansible_facts['distribution'] | default('')) ~ ' '
+               ~ (ansible_facts['distribution_major_version'] | default('')) }}
+      vars:
+        paquets: >-
+          {{ apt_prevision.stdout_lines | select('match', '^Inst ')
+             | map('regex_replace', '^Inst (\S+).*$', '\1') | list }}
+
     - name: Journal de maintenance
       ansible.builtin.lineinfile:
         path: /var/log/maintenance.log
         line: >-
           {{ ansible_facts['date_time']['iso8601'] }} maintenance appliquée,
-          redémarrage {{ 'oui' if reboot_required.stat.exists else 'non' }}
+          {{ maintenance_bilan.paquets | length }} paquet(s),
+          redémarrage {{ {'aucun': 'non nécessaire', 'fait': 'fait', 'attente': 'en attente'}[maintenance_bilan.redemarrage] }}
         create: true
         owner: root
         group: root
         mode: "0644"
+
+# Un échec arrête le play ci-dessus (max_fail_percentage: 0) : ce bilan n'est
+# alors pas envoyé, c'est notification-echec@ qui prévient, journal à l'appui.
+- name: Bilan de la maintenance
+  hosts: all
+  gather_facts: false
+  become: false
+
+  vars:
+    maintenance_notifier: true
+    # Libellé de chaque machine dans le bilan (à défaut : son groupe)
+    maintenance_descriptions:
+      rasb: Machine d'administration
+      pve: Hyperviseur Proxmox
+      fw: Pare-feu et passerelle
+      idp: Fournisseur d'identité (Keycloak)
+    maintenance_groupes:
+      admin: Machine d'administration
+      proxmox: Hyperviseur
+      pare_feu: Pare-feu
+      k3s: Nœud Kubernetes
+      interne: VM du réseau interne
+
+  tasks:
+    # Une expression par valeur : Ansible garde les vrais types (listes, entiers)
+    - name: Bilan de chaque machine
+      ansible.builtin.set_fact:
+        bilan_hotes: >-
+          {{ bilan_hotes | default([]) + [{
+               'nom': item,
+               'groupe': groupe,
+               'description': maintenance_descriptions[item] | default(maintenance_groupes[groupe]),
+               'systeme': b.systeme | default('') | trim,
+               'paquets': b.paquets | default([]),
+               'redemarrage': b.redemarrage | default('absent'),
+               'duree': b.duree | int if b.duree is defined else none}] }}
+      loop: "{{ ansible_play_hosts_all }}"
+      run_once: true
+      vars:
+        b: "{{ hostvars[item].maintenance_bilan | default({}) }}"
+        groupe: >-
+          {{ (hostvars[item].group_names | intersect(maintenance_groupes.keys() | list) + ['interne']) | first }}
+
+    - name: Synthèse du bilan
+      ansible.builtin.set_fact:
+        bilan_attente: "{{ bilan_hotes | selectattr('redemarrage', 'equalto', 'attente') | list }}"
+        bilan_redemarres: "{{ bilan_hotes | selectattr('redemarrage', 'equalto', 'fait') | list | length }}"
+        bilan_total_paquets: "{{ bilan_hotes | map(attribute='paquets') | map('length') | sum }}"
+        bilan_date: "{{ now(fmt='%d/%m/%Y · %H:%M') }}"
+      run_once: true
+
+    - name: Envoyer le bilan aux administrateurs
+      when: maintenance_notifier | bool
+      run_once: true
+      delegate_to: localhost
+      # La maintenance est faite : un e-mail qui ne part pas ne doit pas la marquer en échec
+      ignore_errors: true
+      block:
+        - name: Fichier temporaire pour la version HTML
+          ansible.builtin.tempfile:
+            suffix: .html
+          register: bilan_html
+
+        - name: Version HTML du bilan
+          ansible.builtin.template:
+            src: maintenance-bilan.html.j2
+            dest: "{{ bilan_html.path }}"
+            mode: "0600"
+
+        - name: Envoi
+          ansible.builtin.command:
+            argv:
+              - "{{ admin_notifier | default('/usr/local/bin/smb111-notifier') }}"
+              - --html
+              - "{{ bilan_html.path }}"
+              - >-
+                Maintenance : {{ (bilan_attente | length | string) ~ ' redémarrage(s) à prévoir'
+                                 if bilan_attente else 'tout est à jour' }}
+            # Version texte, pour les clients qui n'affichent pas le HTML
+            stdin: |
+              Maintenance du parc du {{ bilan_date }}.
+              {{ bilan_hotes | length }} machine(s), {{ bilan_total_paquets }} paquet(s) mis à jour.
+
+              {% for h in bilan_hotes %}
+              - {{ h.nom }} ({{ h.description }}) : {{ {'aucun': 'à jour', 'fait': 'redémarré', 'attente': 'REDÉMARRAGE À FAIRE', 'absent': 'NON TRAITÉ'}[h.redemarrage] }}, {{ h.paquets | length }} paquet(s)
+              {% endfor %}
+              {% if bilan_attente %}
+
+              À faire à la main, à un moment annoncé :
+              {% for h in bilan_attente %}
+                {{ 'sudo reboot   (sur rasb)' if h.groupe == 'admin' else 'ssh ' ~ h.nom ~ ' sudo reboot' }}
+              {% endfor %}
+              {% endif %}
+          changed_when: false
+
+      always:
+        - name: Fichier temporaire retiré
+          ansible.builtin.file:
+            path: "{{ bilan_html.path }}"
+            state: absent
+          when: bilan_html.path is defined

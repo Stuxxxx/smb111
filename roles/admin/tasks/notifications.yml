@@ -1,0 +1,66 @@
+---
+# Notifications des administrateurs : msmtp envoie par le compte du vault,
+# smb111-notifier met en forme, notification-echec@ se branche sur les
+# services programmés (OnFailure=).
+
+- name: Paquet msmtp
+  ansible.builtin.apt:
+    name:
+      - msmtp
+      - ca-certificates
+    state: present
+
+- name: Répertoire /etc/smb111
+  ansible.builtin.file:
+    path: /etc/smb111
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Contient le mot de passe d'application : lisible par root et les admins,
+# comme le mot de passe du vault qui le protège déjà.
+- name: Configuration de msmtp
+  ansible.builtin.template:
+    src: msmtprc.j2
+    dest: /etc/msmtprc
+    owner: root
+    group: admins
+    mode: "0640"
+  no_log: true
+
+# La vraie liste (les admins de Keycloak) est écrite par le rôle keycloak_comptes :
+# ici, seulement un point de départ si le fichier n'existe pas encore.
+- name: Destinataires des notifications, en attendant la liste de Keycloak
+  ansible.builtin.copy:
+    content: |
+      # Provisoire : remplacé par les admins de Keycloak au prochain passage
+      # de keycloak_comptes (ansible-playbook site.yml --limit idp --tags comptes)
+      {{ notification_destinataire_secours }}
+    dest: "{{ admin_notification_destinataires }}"
+    owner: root
+    group: admins
+    mode: "0640"
+    force: false
+  no_log: true
+
+- name: Commandes d'envoi
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: admins
+    mode: "0750"
+  loop:
+    - { src: smb111-notifier.j2, dest: "{{ admin_notifier }}" }
+    - { src: smb111-notifier-echec.j2, dest: "{{ admin_notifier_echec }}" }
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Service de notification d'échec
+  ansible.builtin.template:
+    src: notification-echec@.service.j2
+    dest: /etc/systemd/system/notification-echec@.service
+    owner: root
+    group: root
+    mode: "0644"
