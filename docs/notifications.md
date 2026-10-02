@@ -24,6 +24,13 @@ sudo systemctl start check.service            # lancer maintenant
 journalctl -u maintenance.service -n 50 --no-pager
 ```
 
+### Les deux mécanismes de mise à jour
+
+| Mécanisme | Quand | Ce qu'il met à jour |
+|---|---|---|
+| `unattended-upgrades` (rôle `common`, sur chaque machine) | chaque jour, vers 06:00 | les correctifs de sécurité Debian seulement, jamais de redémarrage, sauf la liste `unattended_blacklist` |
+| `maintenance.yml` (timer sur `rasb`) | dimanche, 03:00 | tout, y compris les paquets Proxmox de `pve` (`proxmox-ve`, `pve-manager`, noyau), qui ne viennent pas d'une origine autorisée par `unattended-upgrades` |
+
 ### La maintenance et les redémarrages
 
 `maintenance.yml` met à jour les machines une par une. **Seules les VM redémarrent
