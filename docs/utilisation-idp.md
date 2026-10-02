@@ -39,8 +39,10 @@ AllowedIPs = 10.99.0.0/24, 192.168.1.0/24, 10.10.0.0/24
 - `DNS` : ton PC trouve les noms en `.smb111.lan` (Internet continue de fonctionner).
 - `AllowedIPs` : ton PC sait que le réseau des VM passe par le tunnel.
 
-Ensuite, ouvre l'adresse dans ton navigateur et accepte l'avertissement de certificat
-(c'est attendu : le certificat n'est pas encore officiel).
+Une seule fois aussi, installe l'autorité de certification du SI sur ton PC
+([docs/pki.md](pki.md#télécharger-lautorité-de-certification)) : la page s'ouvre alors
+en HTTPS sans avertissement. Si le navigateur en affiche un, c'est que la racine
+n'est pas installée, ou que ce n'est pas `SMB111 Racine 2026` : ne pas passer outre.
 
 Si tu avais ajouté `idp.smb111.lan` dans ton fichier `hosts`, retire cette ligne : elle
 passerait avant le DNS.
