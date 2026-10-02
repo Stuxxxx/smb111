@@ -15,11 +15,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # gitleaks ne repère pas forcément une clé EC en clair : on vérifie que
-  # chaque clé de la PKI est bien un fichier ansible-vault.
+  # chaque clé de la PKI est bien un fichier ansible-vault, et que celle de la
+  # racine, hors ligne, n'est pas revenue dans le dépôt.
   pki:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Clé de la racine absente du dépôt
+        run: |
+          if [ -e pki/racine.key ]; then
+            echo "::error file=pki/racine.key::la clé de la racine reste hors ligne (docs/pki.md)"
+            exit 1
+          fi
       - name: Clés de la PKI chiffrées par ansible-vault
         run: |
           ok=true
