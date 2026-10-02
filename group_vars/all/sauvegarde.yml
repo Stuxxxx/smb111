@@ -1,0 +1,15 @@
+---
+# Sauvegarde de l'état persistant du SI (docs/sauvegarde.md).
+#
+# rasb vient chercher les sauvegardes sur les VM (playbooks/sauvegarde.yml) :
+# le pare-feu interdit aux VM de joindre le réseau local, et rasb, hors de
+# l'hyperviseur, garde une copie même si pve ou son disque sont perdus.
+
+# Sur rasb : un sous-dossier par machine sauvegardée
+sauvegarde_dir: /var/backups/smb111
+# Conservation sur rasb, en jours ; les sauvegarde_conserver_min plus récentes
+# sont gardées quoi qu'il arrive (si les sauvegardes s'arrêtent, rien ne s'efface)
+sauvegarde_retention_jours: 30
+sauvegarde_conserver_min: 7
+# Conservation sur la VM elle-même, en jours (restauration rapide)
+sauvegarde_retention_vm_jours: 3

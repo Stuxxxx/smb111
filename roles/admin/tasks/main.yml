@@ -33,7 +33,7 @@
     force: true
   become: true
   become_user: "{{ admin_pull_user }}"
-  when: admin_maintenance_enabled or admin_check_enabled
+  when: admin_maintenance_enabled or admin_check_enabled or admin_sauvegarde_enabled
 
 - name: Service ansible-pull
   ansible.builtin.template:
@@ -98,6 +98,38 @@
     state: "{{ 'started' if admin_maintenance_enabled else 'stopped' }}"
     enabled: "{{ admin_maintenance_enabled }}"
     daemon_reload: true
+
+- name: Service de sauvegarde
+  ansible.builtin.template:
+    src: sauvegarde.service.j2
+    dest: /etc/systemd/system/sauvegarde.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Timer de sauvegarde
+  ansible.builtin.template:
+    src: sauvegarde.timer.j2
+    dest: /etc/systemd/system/sauvegarde.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Activer ou désactiver le timer de sauvegarde
+  ansible.builtin.systemd_service:
+    name: sauvegarde.timer
+    state: "{{ 'started' if admin_sauvegarde_enabled else 'stopped' }}"
+    enabled: "{{ admin_sauvegarde_enabled }}"
+    daemon_reload: true
+
+# setgid : les sauvegardes déposées par un admin restent au groupe admins
+- name: Dossier des sauvegardes
+  ansible.builtin.file:
+    path: "{{ sauvegarde_dir }}"
+    state: directory
+    owner: root
+    group: admins
+    mode: "2770"
 
 - name: Dossier des rapports de contrôle
   ansible.builtin.file:
