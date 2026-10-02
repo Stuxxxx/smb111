@@ -1,0 +1,31 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Envoie un e-mail aux administrateurs du SI, par le compte d'envoi du projet.
+#
+#   commande | smb111-notifier "Sujet"
+#   smb111-notifier "Sujet" < fichier
+set -euo pipefail
+
+sujet="${1:?usage : commande | smb111-notifier \"Sujet\"}"
+
+mapfile -t destinataires < <(grep -Ev '^[[:space:]]*(#|$)' {{ admin_notification_destinataires }})
+if [ -z "${destinataires[*]:-}" ]; then
+  echo "Aucun destinataire dans {{ admin_notification_destinataires }}" >&2
+  exit 1
+fi
+
+# Sujet encodé (RFC 2047) : les accents passent dans tous les clients
+encode() { printf '=?UTF-8?B?%s?=' "$(printf '%s' "$1" | base64 -w0)"; }
+
+{
+  printf 'To: %s\n' "$(IFS=,; echo "${destinataires[*]}")"
+  printf 'From: %s <{{ mail_expediteur }}>\n' "$(encode "{{ mail_expediteur_nom }} ($(hostname))")"
+  printf 'Subject: %s\n' "$(encode "[SMB111] $sujet")"
+  printf 'Date: %s\n' "$(LC_ALL=C date -R)"
+  printf 'MIME-Version: 1.0\n'
+  printf 'Content-Type: text/plain; charset=UTF-8\n'
+  printf 'Content-Transfer-Encoding: 8bit\n'
+  printf '\n'
+  cat
+  printf '\n-- \nEnvoyé par %s depuis %s (dépôt Stuxxxx/smb111).\n' "$(basename "$0")" "$(hostname)"
+} | /usr/bin/msmtp --read-recipients

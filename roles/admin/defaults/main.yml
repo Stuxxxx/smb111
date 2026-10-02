@@ -23,3 +23,16 @@ admin_cle_projet: /etc/ansible/smb111
 admin_check_enabled: false
 admin_check_schedule: "*-*-* 06:00:00"
 admin_rapports_dir: /var/log/smb111
+
+# Copie du dépôt réservée aux tâches programmées : réalignée sur
+# admin_repo_branch avant chaque exécution, jamais modifiée à la main.
+# Les clones personnels (~/smb111) restent libres d'être sur une autre branche.
+admin_depot_auto: /var/lib/smb111/depot
+
+# Notifications par e-mail des administrateurs, envoyées directement par le
+# service d'envoi (group_vars/all/mail.yml) : elles partent même si pve ou fw
+# sont arrêtés. Destinataires : notification_destinataires.
+admin_notifications_enabled: true
+admin_notifier: /usr/local/bin/smb111-notifier
+admin_notifier_echec: /usr/local/bin/smb111-notifier-echec
+admin_notification_destinataires: /etc/smb111/destinataires
