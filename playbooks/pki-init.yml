@@ -1,15 +1,19 @@
 ---
-# Création de la PKI du SI. Une seule fois, depuis rasb, dans son clone du dépôt.
+# Création de la PKI du SI, depuis rasb, dans son clone du dépôt.
 #
 #   ansible-playbook playbooks/pki-init.yml
-#   ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire
+#   ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire -e pki_racine_cle=/media/usb/racine.key
+#   ansible-playbook playbooks/pki-init.yml -e regenerer=tout
 #
-# Produit dans pki/, le tout à commiter :
-#   racine.crt, intermediaire.crt     certificats publics
-#   racine.key, intermediaire.key     clés privées, chiffrées par ansible-vault
+# Produit :
+#   pki/racine.crt, pki/intermediaire.crt   certificats publics, à commiter
+#   pki/intermediaire.key                   clé chiffrée par ansible-vault, à commiter
+#   pki_racine_cle                          clé de la racine, chiffrée, HORS du dépôt :
+#                                           à ranger sur une clé USB, puis à effacer de rasb
 #
-# Une PKI existante n'est jamais écrasée : la remplacer invaliderait tous les
-# certificats émis. Seul l'intermédiaire peut être régénéré, avec la racine en place.
+# Une PKI existante n'est jamais écrasée sans le demander : la remplacer invalide
+# tous les certificats émis. regenerer=intermediaire garde la racine (sa clé est
+# alors demandée), regenerer=tout repart de zéro (racine à réinstaller partout).
 # Les clés en clair ne vivent que dans un dossier temporaire, supprimé à la fin.
 
 - name: Créer la PKI du SI
@@ -21,28 +25,60 @@
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     regenerer: ""
+    # Clé de la racine, chiffrée : écrite ici à la création, lue ici pour signer un
+    # nouvel intermédiaire (pointer alors vers la clé USB)
+    pki_racine_cle: "{{ lookup('ansible.builtin.env', 'HOME') }}/pki-racine/racine.key"
+    # Contrainte de noms commune aux deux CA (RFC 5280, critique)
+    pki_contrainte_noms:
+      - "DNS:{{ pki_domaine }}"
+      - "IP:{{ pki_reseau_ip }}"
 
   tasks:
     - name: Valeur de regenerer
       ansible.builtin.assert:
-        that: regenerer in ['', 'intermediaire']
-        fail_msg: "regenerer accepte une seule valeur : intermediaire"
+        that: regenerer in ['', 'intermediaire', 'tout']
+        fail_msg: "regenerer accepte : intermediaire, tout"
         quiet: true
 
-    - name: Clés déjà présentes dans pki/
+    - name: Certificats déjà présents dans pki/
       ansible.builtin.stat:
-        path: "{{ pki_dir }}/{{ item }}.key"
+        path: "{{ pki_dir }}/{{ item }}.crt"
       loop: [racine, intermediaire]
       register: pki_existant
 
+    - name: Clé de la racine hors du dépôt
+      ansible.builtin.stat:
+        path: "{{ pki_racine_cle }}"
+      register: pki_cle_racine
+
     - name: Ce qu'il reste à créer
       ansible.builtin.set_fact:
-        creer_racine: "{{ not pki_existant.results[0].stat.exists }}"
-        creer_intermediaire: "{{ not pki_existant.results[1].stat.exists or regenerer == 'intermediaire' }}"
+        creer_racine: "{{ not pki_existant.results[0].stat.exists or regenerer == 'tout' }}"
+        creer_intermediaire: >-
+          {{ not pki_existant.results[0].stat.exists or regenerer in ['tout', 'intermediaire']
+             or not pki_existant.results[1].stat.exists }}
 
     - name: Rien à faire
       ansible.builtin.meta: end_play
       when: not creer_racine and not creer_intermediaire
+
+    - name: La clé de la racine est disponible pour signer l'intermédiaire
+      ansible.builtin.assert:
+        that: pki_cle_racine.stat.exists
+        fail_msg: >-
+          Clé de la racine introuvable ({{ pki_racine_cle }}). Brancher la clé USB et
+          l'indiquer : -e pki_racine_cle=/media/<usb>/racine.key
+        quiet: true
+      when: not creer_racine
+
+    - name: Pas d'écrasement involontaire d'une clé de racine
+      ansible.builtin.assert:
+        that: not pki_cle_racine.stat.exists or regenerer == 'tout'
+        fail_msg: >-
+          {{ pki_racine_cle }} existe déjà alors que pki/racine.crt est absent.
+          Pour repartir de zéro : -e regenerer=tout
+        quiet: true
+      when: creer_racine
 
     - name: Répertoire pki/
       ansible.builtin.file:
@@ -61,7 +97,7 @@
         # --- Racine -------------------------------------------------------------
         - name: Racine existante, déchiffrée le temps de signer l'intermédiaire
           ansible.builtin.copy:
-            content: "{{ lookup('ansible.builtin.unvault', pki_dir ~ '/racine.key') }}"
+            content: "{{ lookup('ansible.builtin.unvault', pki_racine_cle) }}"
             dest: "{{ tmp.path }}/racine.key"
             mode: "0600"
           no_log: true
@@ -87,6 +123,8 @@
                 basic_constraints_critical: true
                 key_usage: [keyCertSign, cRLSign]
                 key_usage_critical: true
+                name_constraints_permitted: "{{ pki_contrainte_noms }}"
+                name_constraints_critical: true
               register: csr_racine
 
             - name: Certificat autosigné de la racine
@@ -96,6 +134,7 @@
                 privatekey_path: "{{ tmp.path }}/racine.key"
                 provider: selfsigned
                 selfsigned_not_after: "{{ pki_racine_duree }}"
+                force: true
                 mode: "0644"
 
         # --- Intermédiaire --------------------------------------------------------
@@ -120,6 +159,8 @@
                 basic_constraints_critical: true
                 key_usage: [keyCertSign, cRLSign]
                 key_usage_critical: true
+                name_constraints_permitted: "{{ pki_contrainte_noms }}"
+                name_constraints_critical: true
               register: csr_intermediaire
 
             - name: Certificat de l'intermédiaire, signé par la racine
@@ -131,23 +172,43 @@
                 ownca_path: "{{ pki_dir }}/racine.crt"
                 ownca_privatekey_path: "{{ tmp.path }}/racine.key"
                 ownca_not_after: "{{ pki_intermediaire_duree }}"
-                force: "{{ regenerer == 'intermediaire' }}"
+                force: true
                 mode: "0644"
 
-        # --- Chiffrement des clés dans le dépôt ---------------------------------
+        # --- Chiffrement des clés -------------------------------------------------
         # ansible-vault lit le mot de passe via ansible.cfg (vault_password_file)
-        - name: Ancienne clé chiffrée retirée
+        - name: Ancienne clé chiffrée de l'intermédiaire retirée
           ansible.builtin.file:
-            path: "{{ pki_dir }}/{{ item }}.key"
+            path: "{{ pki_dir }}/intermediaire.key"
             state: absent
-          loop: "{{ (['racine'] if creer_racine else []) + (['intermediaire'] if creer_intermediaire else []) }}"
+          when: creer_intermediaire
 
-        - name: Clés chiffrées par ansible-vault dans pki/
+        - name: Clé de l'intermédiaire chiffrée dans pki/
           ansible.builtin.command:
-            cmd: "ansible-vault encrypt --output {{ pki_dir }}/{{ item }}.key {{ tmp.path }}/{{ item }}.key"
+            cmd: "ansible-vault encrypt --output {{ pki_dir }}/intermediaire.key {{ tmp.path }}/intermediaire.key"
             chdir: "{{ inventory_dir }}"
-          loop: "{{ (['racine'] if creer_racine else []) + (['intermediaire'] if creer_intermediaire else []) }}"
           changed_when: true
+          when: creer_intermediaire
+
+        - name: Répertoire de la clé de la racine, hors du dépôt
+          ansible.builtin.file:
+            path: "{{ pki_racine_cle | dirname }}"
+            state: directory
+            mode: "0700"
+          when: creer_racine
+
+        - name: Ancienne clé de la racine retirée
+          ansible.builtin.file:
+            path: "{{ pki_racine_cle }}"
+            state: absent
+          when: creer_racine
+
+        - name: Clé de la racine chiffrée, hors du dépôt
+          ansible.builtin.command:
+            cmd: "ansible-vault encrypt --output {{ pki_racine_cle }} {{ tmp.path }}/racine.key"
+            chdir: "{{ inventory_dir }}"
+          changed_when: true
+          when: creer_racine
 
       always:
         - name: Suppression des clés en clair
@@ -155,11 +216,26 @@
             path: "{{ tmp.path }}"
             state: absent
 
+    # Première PKI : la clé de la racine était versionnée. Elle n'a plus rien à y faire.
+    - name: Aucune clé de racine dans le dépôt
+      ansible.builtin.file:
+        path: "{{ pki_dir }}/racine.key"
+        state: absent
+
+    - name: Empreinte de la racine
+      community.crypto.x509_certificate_info:
+        path: "{{ pki_dir }}/racine.crt"
+      register: pki_racine_info
+
     - name: Suite
       ansible.builtin.debug:
         msg:
-          - "PKI prête dans {{ pki_dir }}. Vérifier, puis commiter :"
+          - "PKI prête dans {{ pki_dir }}. Vérifier :"
           - "  openssl verify -CAfile pki/racine.crt pki/intermediaire.crt"
-          - "  head -1 pki/*.key          # doit afficher $ANSIBLE_VAULT;1.1;AES256"
-          - "  git add pki/ && git commit -m 'feat: PKI du SI'"
-          - "{{ 'Intermédiaire régénéré : relancer site.yml pour réémettre les certificats des services.' if regenerer == 'intermediaire' else '' }}"
+          - "  openssl x509 -in pki/intermediaire.crt -noout -ext nameConstraints"
+          - "  head -1 pki/intermediaire.key          # doit afficher $ANSIBLE_VAULT;1.1;AES256"
+          - "Empreinte SHA-256 de la racine, à reporter dans docs/pki.md :"
+          - "  {{ pki_racine_info.fingerprints.sha256 | upper }}"
+          - "{{ ('Clé de la racine : ' ~ pki_racine_cle ~ ' -> la copier sur une clé USB, puis : shred -u ' ~ pki_racine_cle) if creer_racine else '' }}"
+          - "Commiter : git add -A pki/ docs/pki.md && git commit"
+          - "Puis : ansible-playbook site.yml --tags pki,keycloak"
