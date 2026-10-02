@@ -10,7 +10,7 @@ quelque chose ne va pas. Tout est installé par le rôle `admin`.
 | Timer | Quand | Playbook | E-mail |
 |---|---|---|---|
 | `sauvegarde.timer` | chaque nuit, 02:00 | `playbooks/sauvegarde.yml` | en cas d'échec |
-| `maintenance.timer` | dimanche, 03:00 | `playbooks/maintenance.yml` | **bilan à chaque passage**, ou échec |
+| `maintenance.timer` | dimanche, 03:00 | `playbooks/maintenance.yml` | **bilan HTML à chaque passage** (gabarit `playbooks/templates/maintenance-bilan.html.j2`), ou échec |
 | `check.timer` | chaque jour, 06:00 | `playbooks/check.yml` | si un hôte n'est pas conforme (rapport joint) |
 | `ansible-pull.timer` | 10 min (désactivé) | `admins.yml` | en cas d'échec |
 
@@ -55,7 +55,7 @@ du vault, déjà utilisé par le relais de `fw`). Ils ne dépendent donc ni de `
 |---|---|
 | Configuration d'envoi (msmtp) | `/etc/msmtprc` (root:admins 0640, contient le mot de passe d'application) |
 | Destinataires | `/etc/smb111/destinataires` (root:admins 0640) |
-| Envoyer un message | `/usr/local/bin/smb111-notifier` |
+| Envoyer un message | `/usr/local/bin/smb111-notifier [--html page.html] "Sujet" < texte` |
 | Prévenir d'un échec | `/usr/local/bin/smb111-notifier-echec`, via `notification-echec@.service` |
 
 Chaque service programmé déclare `OnFailure=notification-echec@%n.service` : en cas d'échec,

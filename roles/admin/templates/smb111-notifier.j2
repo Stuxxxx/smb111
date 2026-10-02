@@ -4,9 +4,19 @@
 #
 #   commande | smb111-notifier "Sujet"
 #   smb111-notifier "Sujet" < fichier
+#   smb111-notifier --html bilan.html "Sujet" < version-texte
+#
+# Avec --html, le message contient les deux versions : la page HTML, et le
+# texte lu sur l'entrée pour les clients qui n'affichent pas le HTML.
 set -euo pipefail
 
-sujet="${1:?usage : commande | smb111-notifier \"Sujet\"}"
+html=""
+if [ "${1:-}" = "--html" ]; then
+  html="${2:?usage : smb111-notifier --html fichier.html \"Sujet\"}"
+  [ -r "$html" ] || { echo "Fichier HTML illisible : $html" >&2; exit 1; }
+  shift 2
+fi
+sujet="${1:?usage : commande | smb111-notifier [--html fichier.html] \"Sujet\"}"
 
 mapfile -t destinataires < <(grep -Ev '^[[:space:]]*(#|$)' {{ admin_notification_destinataires }})
 if [ -z "${destinataires[*]:-}" ]; then
@@ -14,8 +24,13 @@ if [ -z "${destinataires[*]:-}" ]; then
   exit 1
 fi
 
-# Sujet encodé (RFC 2047) : les accents passent dans tous les clients
+# En-têtes encodés (RFC 2047) : les accents passent dans tous les clients
 encode() { printf '=?UTF-8?B?%s?=' "$(printf '%s' "$1" | base64 -w0)"; }
+
+texte() {
+  cat
+  printf '\n-- \nEnvoyé par %s depuis %s (dépôt Stuxxxx/smb111).\n' "$(basename "$0")" "$(hostname)"
+}
 
 {
   printf 'To: %s\n' "$(IFS=,; echo "${destinataires[*]}")"
@@ -23,9 +38,18 @@ encode() { printf '=?UTF-8?B?%s?=' "$(printf '%s' "$1" | base64 -w0)"; }
   printf 'Subject: %s\n' "$(encode "[SMB111] $sujet")"
   printf 'Date: %s\n' "$(LC_ALL=C date -R)"
   printf 'MIME-Version: 1.0\n'
-  printf 'Content-Type: text/plain; charset=UTF-8\n'
-  printf 'Content-Transfer-Encoding: 8bit\n'
-  printf '\n'
-  cat
-  printf '\n-- \nEnvoyé par %s depuis %s (dépôt Stuxxxx/smb111).\n' "$(basename "$0")" "$(hostname)"
+  if [ -z "$html" ]; then
+    printf 'Content-Type: text/plain; charset=UTF-8\n'
+    printf 'Content-Transfer-Encoding: 8bit\n\n'
+    texte
+  else
+    frontiere="smb111-$(date +%s)-$$"
+    printf 'Content-Type: multipart/alternative; boundary="%s"\n\n' "$frontiere"
+    printf -- '--%s\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\n\n' "$frontiere"
+    texte
+    # base64 : aucune ligne trop longue pour SMTP, quel que soit le HTML
+    printf -- '\n--%s\nContent-Type: text/html; charset=UTF-8\nContent-Transfer-Encoding: base64\n\n' "$frontiere"
+    base64 -w 76 "$html"
+    printf -- '\n--%s--\n' "$frontiere"
+  fi
 } | /usr/bin/msmtp --read-recipients
