@@ -115,12 +115,14 @@
     group: root
     mode: "0644"
 
+# En --check, l'unité n'est pas réellement écrite : systemd ne la connaît pas encore
 - name: Activer ou désactiver le timer de sauvegarde
   ansible.builtin.systemd_service:
     name: sauvegarde.timer
     state: "{{ 'started' if admin_sauvegarde_enabled else 'stopped' }}"
     enabled: "{{ admin_sauvegarde_enabled }}"
     daemon_reload: true
+  when: not ansible_check_mode
 
 # setgid : les sauvegardes déposées par un admin restent au groupe admins
 - name: Dossier des sauvegardes
