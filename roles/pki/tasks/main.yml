@@ -1,0 +1,23 @@
+---
+# Toutes les machines font confiance à la racine de la PKI du SI :
+# un certificat émis par l'intermédiaire y est valide sans exception.
+- name: La PKI existe
+  ansible.builtin.assert:
+    that: lookup('ansible.builtin.fileglob', pki_dir ~ '/racine.crt') | length > 0
+    fail_msg: "Pas de PKI dans {{ pki_dir }} : lancer d'abord playbooks/pki-init.yml"
+    quiet: true
+  run_once: true
+
+- name: Paquet ca-certificates
+  ansible.builtin.apt:
+    name: ca-certificates
+    state: present
+
+- name: Racine de la PKI dans le magasin de confiance
+  ansible.builtin.copy:
+    src: "{{ pki_dir }}/racine.crt"
+    dest: /usr/local/share/ca-certificates/smb111-racine.crt
+    owner: root
+    group: root
+    mode: "0644"
+  notify: update-ca-certificates

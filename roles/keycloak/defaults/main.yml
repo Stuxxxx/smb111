@@ -27,8 +27,17 @@ keycloak_db_password: "{{ vault_keycloak_db_password }}"
 keycloak_admin_user: admin-temp
 keycloak_admin_password: "{{ vault_keycloak_admin_password }}"
 
-# Certificat TLS : autosigné tant que la PKI du projet n'existe pas.
-# Passer à false et déposer tls.crt / tls.key pour utiliser un vrai certificat.
-keycloak_cert_autosigne: true
-keycloak_cert_file: "{{ keycloak_conf_dir }}/tls.crt"
-keycloak_key_file: "{{ keycloak_conf_dir }}/tls.key"
+# Certificat TLS émis par la PKI du SI (rôle certificat, docs/pki.md).
+# localhost : les appels d'administration faits depuis idp elle-même.
+# keycloak_cert_autosigne: true revient à un certificat autosigné (dépannage).
+keycloak_cert_autosigne: false
+keycloak_cert_nom: idp
+keycloak_cert_dns:
+  - "{{ keycloak_hostname | urlsplit('hostname') }}"
+  - localhost
+keycloak_cert_file: >-
+  {{ keycloak_conf_dir ~ '/tls.crt' if keycloak_cert_autosigne | bool
+     else pki_certificats_dir ~ '/' ~ keycloak_cert_nom ~ '-chaine.crt' }}
+keycloak_key_file: >-
+  {{ keycloak_conf_dir ~ '/tls.key' if keycloak_cert_autosigne | bool
+     else pki_certificats_dir ~ '/' ~ keycloak_cert_nom ~ '.key' }}

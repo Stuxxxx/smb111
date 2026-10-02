@@ -1,0 +1,30 @@
+---
+# Certificat TLS d'un service, signé par l'intermédiaire de la PKI du SI.
+# La clé est générée sur la machine et n'en sort jamais : seule la demande
+# (CSR) remonte au nœud de contrôle, qui la signe.
+#
+#   - name: Certificat de Keycloak
+#     ansible.builtin.import_role:
+#       name: certificat
+#     vars:
+#       certificat_nom: idp
+#       certificat_dns: [idp.smb111.lan]
+#       certificat_groupe: keycloak
+#
+# Fichiers produits dans certificat_dir :
+#   <nom>.key          clé privée            root:<groupe> 0640
+#   <nom>.crt          certificat seul
+#   <nom>-chaine.crt   certificat + intermédiaire : c'est lui que le service présente
+#
+# Un service qui doit redémarrer au renouvellement déclare un handler
+# avec « listen: certificat renouvelé ».
+
+certificat_nom: "{{ inventory_hostname }}"
+certificat_dns: ["{{ inventory_hostname }}.{{ domaine_interne }}"]
+certificat_ip: []
+certificat_groupe: root               # groupe autorisé à lire la clé
+certificat_dir: "{{ pki_certificats_dir }}"
+
+certificat_duree: "+365d"
+# Réémis s'il expire avant cette échéance (à chaque passage de site.yml)
+certificat_renouvellement: "+30d"
