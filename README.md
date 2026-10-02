@@ -9,7 +9,7 @@ manifests Kubernetes, documentation et schémas.
   C'est depuis elle que tout est déployé.
 - **Dépôt public** : aucun secret en clair. Les secrets sont chiffrés avec `ansible-vault`.
 - **Branche `main` protégée** : toute modification passe par une Pull Request relue.
-- **Tâches programmées** sur `rasb` : contrôle de conformité quotidien et
+- **Tâches programmées** sur `rasb` : contrôle de conformité quotidien, sauvegarde nocturne,
   maintenance hebdomadaire, avec notification des admins par e-mail en cas d'échec.
 
 **Documentation :**
@@ -25,6 +25,7 @@ manifests Kubernetes, documentation et schémas.
 | [`docs/reveil-pve.md`](docs/reveil-pve.md) | démarrer l'hyperviseur à distance (Wake-on-LAN) |
 | [`docs/relais-mail.md`](docs/relais-mail.md) | relais de messagerie sur `fw` : envoi des e-mails des VM |
 | [`docs/pki.md`](docs/pki.md) | PKI interne : création, émission des certificats, confiance sur les postes |
+| [`docs/sauvegarde.md`](docs/sauvegarde.md) | sauvegarde et restauration de Keycloak |
 | [`docs/notifications.md`](docs/notifications.md) | tâches programmées sur `rasb` et notifications des admins par e-mail |
 
 ---

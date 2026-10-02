@@ -24,6 +24,10 @@ admin_check_enabled: false
 admin_check_schedule: "*-*-* 06:00:00"
 admin_rapports_dir: /var/log/smb111
 
+# Sauvegarde de l'état persistant (playbooks/sauvegarde.yml), avant la maintenance
+admin_sauvegarde_enabled: false
+admin_sauvegarde_schedule: "*-*-* 02:00:00"
+
 # Copie du dépôt réservée aux tâches programmées : réalignée sur
 # admin_repo_branch avant chaque exécution, jamais modifiée à la main.
 # Les clones personnels (~/smb111) restent libres d'être sur une autre branche.

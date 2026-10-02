@@ -1,0 +1,71 @@
+---
+# Sauvegarde de l'état persistant du SI, rapatriée sur rasb (docs/sauvegarde.md).
+# Aujourd'hui : la base de Keycloak (comptes, groupes, double authentification).
+#
+#   ansible-playbook playbooks/sauvegarde.yml
+#
+# Programmée chaque nuit par le timer sauvegarde.timer (rôle admin), avant la
+# maintenance. Un échec prévient les administrateurs par e-mail ; check.yml
+# signale en plus toute sauvegarde de plus de 26 h.
+
+- name: Sauvegarde de Keycloak
+  hosts: idp
+  become: true
+  gather_facts: false
+
+  vars:
+    export_dossier_vm: /var/backups/keycloak
+    dossier_rasb: "{{ sauvegarde_dir }}/{{ inventory_hostname }}"
+
+  tasks:
+    - name: Export et rapatriement
+      ansible.builtin.import_tasks: taches/export-keycloak.yml
+
+    # --- Conservation sur la VM : quelques jours, pour restaurer vite --------
+    - name: Anciennes sauvegardes sur la VM
+      ansible.builtin.find:
+        paths: "{{ export_dossier_vm }}"
+        patterns: "keycloak_*.dump"
+        age: "{{ sauvegarde_retention_vm_jours }}d"
+      register: anciennes_vm
+
+    - name: Retirer les anciennes sauvegardes de la VM
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ anciennes_vm.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    # --- Conservation sur rasb : au-delà de la durée, sauf les plus récentes -
+    - name: Sauvegardes présentes sur rasb
+      ansible.builtin.find:
+        paths: "{{ dossier_rasb }}"
+        patterns: "keycloak_*.dump"
+      register: sur_rasb
+      delegate_to: localhost
+      become: false
+
+    - name: Retirer les sauvegardes expirées de rasb
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ expirees }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      delegate_to: localhost
+      become: false
+      vars:
+        limite: "{{ now().timestamp() - (sauvegarde_retention_jours | int) * 86400 }}"
+        a_garder: >-
+          {{ (sur_rasb.files | sort(attribute='mtime', reverse=true))[:sauvegarde_conserver_min | int]
+             | map(attribute='path') | list }}
+        expirees: >-
+          {{ sur_rasb.files | rejectattr('path', 'in', a_garder)
+             | selectattr('mtime', 'lt', limite | float) | list }}
+
+    - name: Résumé
+      ansible.builtin.debug:
+        msg: >-
+          Sauvegarde {{ export_fichier }} sur idp et dans {{ dossier_rasb }}
+          ({{ sur_rasb.matched }} sauvegarde(s) sur rasb avant nettoyage).
