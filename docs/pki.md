@@ -28,14 +28,14 @@ Le rôle `certificat` refuse en amont tout nom hors de cette contrainte.
 |---|---|---|
 | Certificats des CA | `pki/racine.crt`, `pki/intermediaire.crt` | oui, en clair (publics) |
 | Clé de l'intermédiaire | `pki/intermediaire.key` | oui, **chiffrée par ansible-vault** |
-| Clé de la racine | clé USB, chiffrée par ansible-vault | **non** : hors ligne, la CI la refuse dans `pki/` |
+| Clé de la racine | hors de `rasb` (poste d'un responsable, gestionnaire de mots de passe), chiffrée par ansible-vault | **non** : la CI la refuse dans `pki/` |
 | Clé d'un service | `/etc/ssl/smb111/<nom>.key` sur la machine du service | non, elle n'en sort jamais |
 | Certificat d'un service | `/etc/ssl/smb111/<nom>.crt` et `<nom>-chaine.crt` | non |
 | Confiance | `/usr/local/share/ca-certificates/smb111-racine.crt` sur toutes les machines | — |
 
 Pourquoi deux niveaux : la racine ne sert qu'une fois, à signer l'intermédiaire. Sa clé
 peut donc rester hors ligne. Si la clé de l'intermédiaire était compromise, on le remplace
-(clé USB branchée) et on réémet les certificats, sans toucher à la racine déjà installée
+(clé de la racine rapportée sur `rasb` le temps de signer) et on réémet les certificats, sans toucher à la racine déjà installée
 partout (machines, postes, navigateurs). Le SI reste reconstructible depuis un
 `git clone` (GEN 02) : l'émission courante n'utilise que l'intermédiaire.
 
@@ -67,12 +67,24 @@ de la racine, chiffrée, est écrite dans `~/pki-racine/racine.key`, **hors du d
 
 ### 2. Mettre la clé de la racine hors ligne
 
+Depuis son poste, la rapatrier, puis l'effacer de `rasb` :
+
 ```bash
-cp ~/pki-racine/racine.key /media/<usb>/racine.key   # clé USB rangée en lieu sûr
-shred -u ~/pki-racine/racine.key
+scp rasb:pki-racine/racine.key smb111-racine.key
+ssh rasb shred -u pki-racine/racine.key
 ```
 
-Elle reste chiffrée par le vault : la clé USB seule ne suffit pas à signer.
+La ranger en pièce jointe d'un gestionnaire de mots de passe (Bitwarden, KeePass…), ou
+au moins hors d'un dossier synchronisé, puis supprimer le fichier téléchargé. Elle
+reste chiffrée par le vault : le fichier seul ne suffit pas à signer.
+
+Pour la réutiliser (nouvel intermédiaire), la renvoyer au même endroit le temps de
+l'opération, puis l'effacer de nouveau :
+
+```bash
+ssh rasb mkdir -m 700 -p pki-racine
+scp smb111-racine.key rasb:pki-racine/racine.key
+```
 
 ### 3. Vérifier
 
@@ -191,10 +203,10 @@ Toutes les options sont décrites dans `roles/certificat/defaults/main.yml`.
 | Certificat de service à moins de 30 jours de l'échéance | `ansible-playbook site.yml --limit <machine>` : il est réémis automatiquement |
 | Nom à ajouter à un certificat | modifier `certificat_dns`, relancer le rôle : réémis automatiquement |
 | Clé d'un service compromise | supprimer `/etc/ssl/smb111/<nom>.*` sur la machine, relancer le rôle |
-| Clé de l'intermédiaire compromise | clé USB branchée : `ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire -e pki_racine_cle=/media/<usb>/racine.key`, commiter, puis `site.yml` sur toutes les machines |
+| Clé de l'intermédiaire compromise | clé de la racine renvoyée sur `rasb` (étape 2), `ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire`, l'effacer, commiter, puis `site.yml` sur toutes les machines |
 | Intermédiaire bientôt expiré (5 ans) | même commande que ci-dessus |
-| Mot de passe du vault compromis | changer le mot de passe du vault (`ansible-vault rekey`, y compris la copie de la clé USB), puis traiter comme une compromission de l'intermédiaire |
-| Clé USB de la racine perdue | rien d'urgent tant que le mot de passe du vault est sûr ; prévoir un `regenerer=tout` avant l'expiration de l'intermédiaire |
+| Mot de passe du vault compromis | changer le mot de passe du vault (`ansible-vault rekey`, y compris la copie hors ligne de la clé de la racine), puis traiter comme une compromission de l'intermédiaire |
+| Clé de la racine perdue | rien d'urgent tant que le mot de passe du vault est sûr ; prévoir un `regenerer=tout` avant l'expiration de l'intermédiaire |
 
 ---
 
