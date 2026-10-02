@@ -14,6 +14,7 @@
 #   check_comptes_autorises      comptes interactifs attendus (défaut : root + admins du dépôt)
 #   check_timers_attendus        timers systemd devant être actifs
 #   check_disque_seuil           % libre minimal accepté               (défaut : 15)
+#   check_certificats_jours      validité minimale des certificats     (défaut : 30)
 #   check_rapports_dir           dossier des rapports                  (défaut : /var/log/smb111)
 #   check_retention_jours        conservation des rapports, en jours   (défaut : 30)
 #   check_echec_si_non_conforme  code retour ≠ 0 si un hôte est KO     (défaut : false)
@@ -34,6 +35,7 @@
       - timers
       - horloge
       - wireguard
+      - certificats
 
     # Les administrateurs déclarés dans le dépôt sont légitimes par construction.
     comptes_autorises: >-
@@ -145,7 +147,33 @@
       changed_when: false
       failed_when: false
 
-    # --- Certificats : à venir --------------------------
+    # --- Certificats de la PKI du SI ---------------------------------------
+    # Feuilles seules (les fichiers -chaine.crt reprennent les mêmes)
+    - name: Racine de la PKI dans le magasin de confiance
+      ansible.builtin.stat:
+        path: /usr/local/share/ca-certificates/smb111-racine.crt
+      register: pki_racine
+
+    - name: Échéance des certificats émis
+      ansible.builtin.shell: |
+        set -o pipefail
+        for f in {{ pki_certificats_dir }}/*.crt; do
+          [ -e "$f" ] || continue
+          case "$f" in *-chaine.crt) continue ;; esac
+          fin=$(openssl x509 -enddate -noout -in "$f" | cut -d= -f2)
+          if openssl x509 -checkend {{ (check_certificats_jours | default(30) | int) * 86400 }} -noout -in "$f" >/dev/null; then
+            echo "OK $(basename "$f" .crt)"
+          else
+            echo "KO $(basename "$f" .crt) (expire le $fin)"
+          fi
+        done
+      args:
+        executable: /bin/bash
+      become: true
+      register: certificats_etat
+      changed_when: false
+      failed_when: false
+
     # --- Tunnel WireGuard ---------------------------------------------------
     - name: État du tunnel WireGuard
       ansible.builtin.command: "wg show {{ check_wg_interface | default('wg0') }} latest-handshakes"
@@ -209,6 +237,14 @@
                        if wg_state.rc | default(1) != 0
                        else (wg_pairs_actifs | length | string) ~ '/' ~ (wg_pairs | length | string)
                             ~ ' pair(s) avec un handshake récent') }}
+          certificats:
+            ok: "{{ pki_racine.stat.exists and certificats_ko | length == 0 }}"
+            detail: >-
+              racine {{ 'installée' if pki_racine.stat.exists else '**absente du magasin de confiance**' }} ;
+              {{ ('à renouveler : ' ~ certificats_ko | join(', '))
+                 if certificats_ko
+                 else (certificats_ok | length | string) ~ ' certificat(s) valide(s) plus de '
+                      ~ (check_certificats_jours | default(30) | string) ~ ' jours' }}
       vars:
         seuil: "{{ check_disque_seuil | default(15) | int }}"
         pkgs_reboot: >-
@@ -238,6 +274,12 @@
           {{ wg_pairs | map('regex_replace', '^\S+\s+', '') | map('int')
              | select('gt', 0) | list }}
         wg_ok: "{{ wg_state.rc | default(1) == 0 }}"
+        certificats_ok: >-
+          {{ certificats_etat.stdout_lines | default([]) | select('match', '^OK ')
+             | map('regex_replace', '^OK ', '') | list }}
+        certificats_ko: >-
+          {{ certificats_etat.stdout_lines | default([]) | select('match', '^KO ')
+             | map('regex_replace', '^KO ', '') | list }}
         f2b: >-
           {{ ansible_facts.services['fail2ban.service']
              | default({'state': 'absent', 'status': 'absent'}) }}

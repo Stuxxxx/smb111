@@ -4,3 +4,4 @@
     name: keycloak
     state: restarted
     daemon_reload: true
+  listen: certificat renouvelé

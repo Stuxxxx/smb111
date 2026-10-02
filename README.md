@@ -23,6 +23,7 @@ manifests Kubernetes, documentation et schémas.
 | [`docs/utilisation-idp.md`](docs/utilisation-idp.md) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
 | [`docs/reveil-pve.md`](docs/reveil-pve.md) | démarrer l'hyperviseur à distance (Wake-on-LAN) |
 | [`docs/relais-mail.md`](docs/relais-mail.md) | relais de messagerie sur `fw` : envoi des e-mails des VM |
+| [`docs/pki.md`](docs/pki.md) | PKI interne : création, émission des certificats, confiance sur les postes |
 
 ---
 

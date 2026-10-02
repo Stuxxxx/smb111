@@ -1,0 +1,165 @@
+---
+# Création de la PKI du SI. Une seule fois, depuis rasb, dans son clone du dépôt.
+#
+#   ansible-playbook playbooks/pki-init.yml
+#   ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire
+#
+# Produit dans pki/, le tout à commiter :
+#   racine.crt, intermediaire.crt     certificats publics
+#   racine.key, intermediaire.key     clés privées, chiffrées par ansible-vault
+#
+# Une PKI existante n'est jamais écrasée : la remplacer invaliderait tous les
+# certificats émis. Seul l'intermédiaire peut être régénéré, avec la racine en place.
+# Les clés en clair ne vivent que dans un dossier temporaire, supprimé à la fin.
+
+- name: Créer la PKI du SI
+  hosts: admin
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    regenerer: ""
+
+  tasks:
+    - name: Valeur de regenerer
+      ansible.builtin.assert:
+        that: regenerer in ['', 'intermediaire']
+        fail_msg: "regenerer accepte une seule valeur : intermediaire"
+        quiet: true
+
+    - name: Clés déjà présentes dans pki/
+      ansible.builtin.stat:
+        path: "{{ pki_dir }}/{{ item }}.key"
+      loop: [racine, intermediaire]
+      register: pki_existant
+
+    - name: Ce qu'il reste à créer
+      ansible.builtin.set_fact:
+        creer_racine: "{{ not pki_existant.results[0].stat.exists }}"
+        creer_intermediaire: "{{ not pki_existant.results[1].stat.exists or regenerer == 'intermediaire' }}"
+
+    - name: Rien à faire
+      ansible.builtin.meta: end_play
+      when: not creer_racine and not creer_intermediaire
+
+    - name: Répertoire pki/
+      ansible.builtin.file:
+        path: "{{ pki_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Dossier temporaire pour les clés en clair
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: pki-
+      register: tmp
+
+    - name: Création des CA
+      block:
+        # --- Racine -------------------------------------------------------------
+        - name: Racine existante, déchiffrée le temps de signer l'intermédiaire
+          ansible.builtin.copy:
+            content: "{{ lookup('ansible.builtin.unvault', pki_dir ~ '/racine.key') }}"
+            dest: "{{ tmp.path }}/racine.key"
+            mode: "0600"
+          no_log: true
+          when: not creer_racine
+
+        - name: Création de la racine
+          when: creer_racine
+          block:
+            - name: Clé privée de la racine
+              community.crypto.openssl_privatekey:
+                path: "{{ tmp.path }}/racine.key"
+                type: ECC
+                curve: secp384r1
+                mode: "0600"
+
+            - name: Demande de la racine
+              community.crypto.openssl_csr_pipe:
+                privatekey_path: "{{ tmp.path }}/racine.key"
+                common_name: "{{ pki_racine_cn }}"
+                organization_name: "{{ pki_organisation }}"
+                use_common_name_for_san: false
+                basic_constraints: ["CA:TRUE"]
+                basic_constraints_critical: true
+                key_usage: [keyCertSign, cRLSign]
+                key_usage_critical: true
+              register: csr_racine
+
+            - name: Certificat autosigné de la racine
+              community.crypto.x509_certificate:
+                path: "{{ pki_dir }}/racine.crt"
+                csr_content: "{{ csr_racine.csr }}"
+                privatekey_path: "{{ tmp.path }}/racine.key"
+                provider: selfsigned
+                selfsigned_not_after: "{{ pki_racine_duree }}"
+                mode: "0644"
+
+        # --- Intermédiaire --------------------------------------------------------
+        - name: Création de l'intermédiaire
+          when: creer_intermediaire
+          block:
+            - name: Clé privée de l'intermédiaire
+              community.crypto.openssl_privatekey:
+                path: "{{ tmp.path }}/intermediaire.key"
+                type: ECC
+                curve: secp384r1
+                mode: "0600"
+
+            # pathlen:0 : l'intermédiaire signe des services, jamais une autre CA
+            - name: Demande de l'intermédiaire
+              community.crypto.openssl_csr_pipe:
+                privatekey_path: "{{ tmp.path }}/intermediaire.key"
+                common_name: "{{ pki_intermediaire_cn }}"
+                organization_name: "{{ pki_organisation }}"
+                use_common_name_for_san: false
+                basic_constraints: ["CA:TRUE", "pathlen:0"]
+                basic_constraints_critical: true
+                key_usage: [keyCertSign, cRLSign]
+                key_usage_critical: true
+              register: csr_intermediaire
+
+            - name: Certificat de l'intermédiaire, signé par la racine
+              community.crypto.x509_certificate:
+                path: "{{ pki_dir }}/intermediaire.crt"
+                csr_content: "{{ csr_intermediaire.csr }}"
+                privatekey_path: "{{ tmp.path }}/intermediaire.key"
+                provider: ownca
+                ownca_path: "{{ pki_dir }}/racine.crt"
+                ownca_privatekey_path: "{{ tmp.path }}/racine.key"
+                ownca_not_after: "{{ pki_intermediaire_duree }}"
+                force: "{{ regenerer == 'intermediaire' }}"
+                mode: "0644"
+
+        # --- Chiffrement des clés dans le dépôt ---------------------------------
+        # ansible-vault lit le mot de passe via ansible.cfg (vault_password_file)
+        - name: Ancienne clé chiffrée retirée
+          ansible.builtin.file:
+            path: "{{ pki_dir }}/{{ item }}.key"
+            state: absent
+          loop: "{{ (['racine'] if creer_racine else []) + (['intermediaire'] if creer_intermediaire else []) }}"
+
+        - name: Clés chiffrées par ansible-vault dans pki/
+          ansible.builtin.command:
+            cmd: "ansible-vault encrypt --output {{ pki_dir }}/{{ item }}.key {{ tmp.path }}/{{ item }}.key"
+            chdir: "{{ inventory_dir }}"
+          loop: "{{ (['racine'] if creer_racine else []) + (['intermediaire'] if creer_intermediaire else []) }}"
+          changed_when: true
+
+      always:
+        - name: Suppression des clés en clair
+          ansible.builtin.file:
+            path: "{{ tmp.path }}"
+            state: absent
+
+    - name: Suite
+      ansible.builtin.debug:
+        msg:
+          - "PKI prête dans {{ pki_dir }}. Vérifier, puis commiter :"
+          - "  openssl verify -CAfile pki/racine.crt pki/intermediaire.crt"
+          - "  head -1 pki/*.key          # doit afficher $ANSIBLE_VAULT;1.1;AES256"
+          - "  git add pki/ && git commit -m 'feat: PKI du SI'"
+          - "{{ 'Intermédiaire régénéré : relancer site.yml pour réémettre les certificats des services.' if regenerer == 'intermediaire' else '' }}"

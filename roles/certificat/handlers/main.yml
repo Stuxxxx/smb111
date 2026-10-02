@@ -1,0 +1,5 @@
+---
+# Point d'accroche : les services concernés écoutent ce nom (listen) pour redémarrer
+- name: certificat renouvelé
+  ansible.builtin.debug:
+    msg: "Certificat {{ certificat_nom }} émis ou renouvelé"
