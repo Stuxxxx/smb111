@@ -14,3 +14,12 @@ mail_service_mdp: "{{ vault_mail_service_mdp }}"
 # Expéditeur affiché. Gmail impose l'adresse du compte d'envoi.
 mail_expediteur: "{{ vault_mail_service_utilisateur }}"
 mail_expediteur_nom: "SMB111"
+
+# Destinataires des notifications des administrateurs (échecs des tâches
+# programmées, bilan de maintenance, restauration) : les membres actifs du
+# groupe « admins » de Keycloak. La liste est relevée dans Keycloak par le rôle
+# keycloak_comptes, et chaque nuit par sauvegarde.yml, puis écrite dans ce
+# fichier sur rasb. Les adresses ne sont jamais dans le dépôt.
+notification_destinataires_fichier: /etc/smb111/destinataires
+# Tant que la liste n'a pas été relevée, ou si le groupe est vide
+notification_destinataire_secours: "{{ mail_service_utilisateur }}"

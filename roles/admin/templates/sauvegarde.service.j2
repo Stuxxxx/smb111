@@ -1,0 +1,4 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+{% set tache_description = "Sauvegarde de l'état persistant du SI" %}
+{% set tache_commande = admin_ansible_bin ~ "/ansible-playbook playbooks/sauvegarde.yml" %}
+{% include "_tache-programmee.j2" %}
