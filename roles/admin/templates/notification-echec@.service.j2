@@ -1,0 +1,8 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Instancié par OnFailure=notification-echec@%n.service : %i est l'unité en échec.
+[Unit]
+Description=Notification par e-mail de l'échec de %i
+
+[Service]
+Type=oneshot
+ExecStart={{ admin_notifier_echec }} %i

@@ -1,11 +1,4 @@
-[Unit]
-Description=Maintenance hebdomadaire du parc
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-User={{ admin_pull_user }}
-WorkingDirectory=/home/{{ admin_pull_user }}/smb111
-Environment=PATH=/home/{{ admin_pull_user }}/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart={{ admin_ansible_bin }}/ansible-playbook playbooks/maintenance.yml
+# Géré par Ansible — toute modification manuelle sera écrasée
+{% set tache_description = "Maintenance hebdomadaire du parc" %}
+{% set tache_commande = admin_ansible_bin ~ "/ansible-playbook playbooks/maintenance.yml" %}
+{% include "_tache-programmee.j2" %}

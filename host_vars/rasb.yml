@@ -7,7 +7,7 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1 192.168.1.0/24"
 # disparaît seule, sans interférer avec le développement des autres rôles.
 admin_pull_enabled: false 
 admin_pull_playbook: admins.yml
-# Activer la maintenance (redémarrage les dimanches)
+# Maintenance le dimanche à 03:00 (seules les VM redémarrent automatiquement)
 admin_maintenance_enabled: true
 admin_check_enabled: true
 check_timers_attendus: >-

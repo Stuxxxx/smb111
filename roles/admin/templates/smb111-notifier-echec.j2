@@ -1,0 +1,33 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Prévient les administrateurs qu'une tâche programmée a échoué. Appelé par
+# notification-echec@<unité>.service, déclaré en OnFailure= des services.
+#
+#   smb111-notifier-echec check.service
+set -euo pipefail
+
+unite="${1:?usage : smb111-notifier-echec <unité>}"
+quand="$(date '+%d/%m/%Y à %H:%M')"
+
+case "$unite" in
+  check.service)       sujet="Non-conformité détectée sur le parc" ;;
+  maintenance.service) sujet="Échec de la maintenance du parc" ;;
+  sauvegarde.service)  sujet="Échec de la sauvegarde" ;;
+  *)                   sujet="Échec de $unite" ;;
+esac
+
+{
+  echo "L'exécution programmée « $unite » a échoué sur $(hostname), le $quand."
+  echo
+  if [ "$unite" = check.service ] && [ -e {{ admin_rapports_dir }}/dernier.md ]; then
+    echo "=== Rapport de conformité ({{ admin_rapports_dir }}/dernier.md) ==="
+    echo
+    cat {{ admin_rapports_dir }}/dernier.md
+    echo
+  fi
+  echo "=== Fin du journal de $unite ==="
+  echo
+  journalctl --unit "$unite" --lines 60 --no-pager --output cat
+  echo
+  echo "Détail : journalctl -u $unite -e   (sur $(hostname))"
+} | {{ admin_notifier }} "$sujet"

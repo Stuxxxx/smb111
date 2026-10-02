@@ -1,10 +1,21 @@
 ---
-# Mise à jour complète du parc, une machine à la fois.
-# Les nœuds Kubernetes sont vidés avant et remis en service après.
+# Mise à jour complète du parc, une machine à la fois, puis bilan par e-mail
+# aux administrateurs. Les nœuds Kubernetes sont vidés avant et remis en
+# service après.
 #
 #   ansible-playbook playbooks/maintenance.yml
-#   ansible-playbook playbooks/maintenance.yml --limit rasb
+#   ansible-playbook playbooks/maintenance.yml --limit idp
 #   ansible-playbook playbooks/maintenance.yml -e maintenance_reboot=false
+#   ansible-playbook playbooks/maintenance.yml -e maintenance_notifier=false
+#
+# Redémarrages : seules les VM redémarrent d'elles-mêmes. Ne redémarrent
+# jamais automatiquement (maintenance_sans_redemarrage) :
+#   - rasb, qui exécute ce playbook : Ansible refuse de redémarrer le nœud de
+#     contrôle, la tâche échouait et arrêtait la maintenance de tout le parc ;
+#   - pve, qui porte toutes les VM : le redémarrer coupe tout le SI d'un coup,
+#     cluster compris, ce qui annule l'intérêt du drain nœud par nœud.
+# Leur redémarrage en attente figure dans le bilan, et check.yml le signale
+# chaque jour : il se fait à la main, à un moment annoncé.
 
 - name: Maintenance du parc
   hosts: all
@@ -14,8 +25,17 @@
 
   vars:
     maintenance_reboot: true
+    maintenance_sans_redemarrage: "{{ groups.get('admin', []) + groups.get('proxmox', []) }}"
 
   tasks:
+    - name: Paquets à mettre à jour
+      ansible.builtin.command: apt-get --simulate dist-upgrade
+      environment:
+        LC_ALL: C
+      register: apt_prevision
+      changed_when: false
+      check_mode: false
+
     - name: Retirer le nœud du cluster (drain)
       ansible.builtin.command:
         cmd: >
@@ -40,9 +60,11 @@
     - name: Redémarrer
       ansible.builtin.reboot:
         reboot_timeout: 600
-      when:
-        - reboot_required.stat.exists
-        - maintenance_reboot | bool
+      when: redemarrage_autorise
+      vars:
+        redemarrage_autorise: >-
+          {{ reboot_required.stat.exists and maintenance_reboot | bool
+             and inventory_hostname not in maintenance_sans_redemarrage }}
 
     - name: Attendre que les services soient repartis
       ansible.builtin.service_facts:
@@ -55,13 +77,80 @@
       when: inventory_hostname in groups.get('k3s', [])
       changed_when: true
 
+    - name: Bilan de la machine
+      ansible.builtin.set_fact:
+        maintenance_bilan:
+          paquets: "{{ paquets }}"
+          redemarrage: >-
+            {{ 'aucun' if not reboot_required.stat.exists
+               else ('fait' if inventory_hostname not in maintenance_sans_redemarrage
+                              and maintenance_reboot | bool
+                     else 'EN ATTENTE, à faire à la main') }}
+      vars:
+        paquets: >-
+          {{ apt_prevision.stdout_lines | select('match', '^Inst ')
+             | map('regex_replace', '^Inst (\S+).*$', '\1') | list }}
+
     - name: Journal de maintenance
       ansible.builtin.lineinfile:
         path: /var/log/maintenance.log
         line: >-
           {{ ansible_facts['date_time']['iso8601'] }} maintenance appliquée,
-          redémarrage {{ 'oui' if reboot_required.stat.exists else 'non' }}
+          {{ maintenance_bilan.paquets | length }} paquet(s),
+          redémarrage {{ maintenance_bilan.redemarrage }}
         create: true
         owner: root
         group: root
         mode: "0644"
+
+# Un échec arrête le play ci-dessus (max_fail_percentage: 0) : ce bilan n'est
+# alors pas envoyé, c'est notification-echec@ qui prévient, journal à l'appui.
+- name: Bilan de la maintenance
+  hosts: all
+  gather_facts: false
+  become: false
+
+  vars:
+    maintenance_notifier: true
+
+  tasks:
+    - name: Envoyer le bilan aux administrateurs
+      ansible.builtin.command:
+        argv:
+          - "{{ admin_notifier | default('/usr/local/bin/smb111-notifier') }}"
+          - >-
+            Bilan de maintenance : {{ (attente | length | string) ~ ' redémarrage(s) à faire à la main'
+                                      if attente else 'tout est à jour' }}
+        stdin: |
+          Maintenance du parc terminée le {{ now(fmt='%d/%m/%Y à %H:%M') }}.
+
+          {% for h in ansible_play_hosts_all %}
+          {% set b = hostvars[h].maintenance_bilan | default(none) %}
+          {% if b is none %}
+          - {{ h }} : non traité
+          {% else %}
+          - {{ h }} : {{ b.paquets | length }} paquet(s) mis à jour, redémarrage {{ b.redemarrage }}
+          {% if b.paquets %}
+              {{ b.paquets | join(', ') }}
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+          {% if attente %}
+
+          Redémarrage à faire à la main, à un moment annoncé :
+          {% for h in attente %}
+            - {{ h }} : {{ 'ssh ' ~ h ~ ' sudo reboot' if h not in groups.get('proxmox', []) else 'arrêt de tout le SI pendant le redémarrage : ssh pve sudo reboot (les VM repartent seules)' }}
+          {% endfor %}
+          {% endif %}
+      run_once: true
+      delegate_to: localhost
+      changed_when: false
+      # La maintenance est faite : un e-mail qui ne part pas ne doit pas la marquer en échec
+      ignore_errors: true
+      when: maintenance_notifier | bool
+      vars:
+        attente: >-
+          {{ ansible_play_hosts_all | map('extract', hostvars)
+             | selectattr('maintenance_bilan', 'defined')
+             | selectattr('maintenance_bilan.redemarrage', 'match', 'EN ATTENTE')
+             | map(attribute='inventory_hostname') | list }}

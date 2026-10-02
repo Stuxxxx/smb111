@@ -14,3 +14,10 @@ mail_service_mdp: "{{ vault_mail_service_mdp }}"
 # Expéditeur affiché. Gmail impose l'adresse du compte d'envoi.
 mail_expediteur: "{{ vault_mail_service_utilisateur }}"
 mail_expediteur_nom: "SMB111"
+
+# Destinataires des notifications des administrateurs (échecs des tâches
+# programmées, bilan de maintenance, restauration). Les adresses des personnes
+# sont des données personnelles : elles vont dans le vault, jamais en clair.
+#   vault_notification_destinataires: ["alice@exemple.org", "bob@exemple.org"]
+# À défaut, la boîte du compte d'envoi du projet.
+notification_destinataires: "{{ vault_notification_destinataires | default([mail_service_utilisateur]) }}"

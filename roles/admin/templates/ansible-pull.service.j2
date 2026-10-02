@@ -2,6 +2,9 @@
 Description=Applique la configuration depuis le dépôt Git
 After=network-online.target
 Wants=network-online.target
+{% if admin_notifications_enabled %}
+OnFailure=notification-echec@%n.service
+{% endif %}
 
 [Service]
 Type=oneshot
