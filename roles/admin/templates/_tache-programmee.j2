@@ -13,7 +13,7 @@ OnFailure=notification-echec@%n.service
 Type=oneshot
 User={{ admin_pull_user }}
 WorkingDirectory={{ admin_depot_auto }}
-Environment=PATH={{ admin_ansible_bin }}:/usr/local/bin:/usr/bin:/bin
+Environment=PATH={{ [admin_ansible_bin, '/usr/local/bin', '/usr/bin', '/bin'] | unique | join(':') }}
 # Toujours l'état fusionné de {{ admin_repo_branch }}, jamais une branche en cours
 ExecStartPre=/usr/bin/git -C {{ admin_depot_auto }} fetch --quiet origin {{ admin_repo_branch }}
 ExecStartPre=/usr/bin/git -C {{ admin_depot_auto }} reset --hard --quiet FETCH_HEAD
