@@ -4,11 +4,11 @@ Unattended-Upgrade::Origins-Pattern {
     "origin=Raspbian,codename=${distro_codename},label=Raspbian";
 };
 
-// Les paquets à ne jamais mettre à jour automatiquement
+// Les paquets à ne jamais mettre à jour automatiquement (unattended_blacklist)
 Unattended-Upgrade::Package-Blacklist {
-    "k3s";
-    "containerd";
-    "kubelet";
+{% for paquet in unattended_blacklist %}
+    "{{ paquet }}";
+{% endfor %}
 };
 
 Unattended-Upgrade::AutoFixInterruptedDpkg "true";
