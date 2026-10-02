@@ -60,7 +60,8 @@
     - name: Volumes dont l'espace libre passe sous le seuil
       ansible.builtin.shell: |
         set -o pipefail
-        df -P -x tmpfs -x devtmpfs -x overlay -x squashfs \
+        # efivarfs : variables du firmware UEFI, toujours vu « plein », pas un disque
+        df -P -x tmpfs -x devtmpfs -x overlay -x squashfs -x efivarfs \
           | awk -v seuil={{ check_disque_seuil | default(15) | int }} '
               NR > 1 {
                 gsub(/%/, "", $5)
