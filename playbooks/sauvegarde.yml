@@ -64,6 +64,12 @@
           {{ sur_rasb.files | rejectattr('path', 'in', a_garder)
              | selectattr('mtime', 'lt', limite | float) | list }}
 
+    # Les admins de Keycloak ont pu changer depuis la console : liste rafraîchie
+    - name: Destinataires des notifications (admins de Keycloak)
+      ansible.builtin.import_role:
+        name: keycloak_comptes
+        tasks_from: destinataires
+
     - name: Résumé
       ansible.builtin.debug:
         msg: >-

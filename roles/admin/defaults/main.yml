@@ -35,8 +35,8 @@ admin_depot_auto: /var/lib/smb111/depot
 
 # Notifications par e-mail des administrateurs, envoyées directement par le
 # service d'envoi (group_vars/all/mail.yml) : elles partent même si pve ou fw
-# sont arrêtés. Destinataires : notification_destinataires.
+# sont arrêtés. Destinataires : les admins de Keycloak (group_vars/all/mail.yml).
 admin_notifications_enabled: true
 admin_notifier: /usr/local/bin/smb111-notifier
 admin_notifier_echec: /usr/local/bin/smb111-notifier-echec
-admin_notification_destinataires: /etc/smb111/destinataires
+admin_notification_destinataires: "{{ notification_destinataires_fichier }}"
