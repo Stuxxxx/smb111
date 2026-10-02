@@ -4,15 +4,24 @@
 #   racine          signe l'intermédiaire, et rien d'autre
 #   intermédiaire   signe les certificats des services (et, plus tard, cert-manager)
 #
-# Les certificats des CA sont publics et versionnés dans pki/. Leurs clés
-# privées y sont aussi, chiffrées par ansible-vault. Création : playbooks/pki-init.yml.
+# Les certificats des CA sont publics et versionnés dans pki/. La clé de
+# l'intermédiaire y est aussi, chiffrée par ansible-vault ; celle de la racine
+# est hors de rasb, sur le poste d'un responsable. Création : playbooks/pki-init.yml.
 pki_dir: "{{ inventory_dir }}/pki"
 
 pki_organisation: "SMB111"
-pki_racine_cn: "SMB111 Racine"
+# L'année distingue cette génération de la précédente dans les magasins de confiance
+pki_racine_cn: "SMB111 Racine 2026"
 pki_racine_duree: "+3650d"            # 10 ans
-pki_intermediaire_cn: "SMB111 Intermediaire"
+pki_intermediaire_cn: "SMB111 Intermediaire 2026"
 pki_intermediaire_duree: "+1825d"     # 5 ans
+
+# Contrainte de noms, portée par la racine et l'intermédiaire : un poste qui fait
+# confiance à la racine n'accepte d'elle que ces noms, jamais google.com ou une banque.
+# Un nom DNS couvre aussi tous ses sous-domaines. Les modifier impose de
+# régénérer la PKI (pki-init.yml -e regenerer=tout).
+pki_domaine: "{{ domaine_interne }}"
+pki_reseau_ip: "{{ reseau_interne }}.0/24"     # un /24 : le rôle certificat le suppose
 
 # Sur chaque machine : clés et certificats des services émis par le rôle certificat
 pki_certificats_dir: /etc/ssl/smb111

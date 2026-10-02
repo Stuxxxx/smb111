@@ -1,4 +1,16 @@
 ---
+# Hors de la contrainte de noms de la PKI, le certificat serait signé sans erreur
+# mais refusé par tous les clients : mieux vaut l'arrêter ici.
+- name: Les noms de {{ certificat_nom }} respectent la contrainte de la PKI
+  ansible.builtin.assert:
+    that:
+      - certificat_dns | reject('equalto', pki_domaine) | reject('match', '.*\.' ~ (pki_domaine | regex_escape) ~ '$') | list | length == 0
+      - certificat_ip | reject('match', (pki_reseau_ip | regex_replace('0/24$', '') | regex_escape) ~ '\d+$') | list | length == 0
+    fail_msg: >-
+      Seuls *.{{ pki_domaine }} et les adresses de {{ pki_reseau_ip }} peuvent être
+      certifiés (docs/pki.md). Demandé : {{ (certificat_dns + certificat_ip) | join(', ') }}
+    quiet: true
+
 - name: Bibliothèque cryptography (modules community.crypto)
   ansible.builtin.apt:
     name: python3-cryptography
