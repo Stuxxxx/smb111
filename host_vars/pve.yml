@@ -1,10 +1,7 @@
-unattended_blacklist:
-  - k3s
-  - containerd
-  - kubelet
-  - pve-manager
-  - proxmox-ve
-  - pve-kernel
+# Les paquets Proxmox ne viennent pas d'une origine autorisée par
+# unattended-upgrades (sécurité Debian uniquement) : ils sont mis à jour
+# chaque dimanche par playbooks/maintenance.yml, sans redémarrage automatique
+# de pve (redémarrage à la main, signalé par le bilan et par check.yml).
 
 # Le tunnel est déjà authentifié par clé : ne pas s'y bannir soi-même
 fail2ban_ignoreip: "127.0.0.1/8 ::1 10.99.0.0/24"
