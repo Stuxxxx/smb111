@@ -35,6 +35,15 @@
   become_user: "{{ admin_pull_user }}"
   when: admin_maintenance_enabled or admin_check_enabled or admin_sauvegarde_enabled
 
+- name: Commande de réveil de l'hyperviseur pour les tâches programmées
+  ansible.builtin.template:
+    src: smb111-avec-pve.j2
+    dest: "{{ admin_avec_pve }}"
+    owner: root
+    group: admins
+    mode: "0750"
+  when: admin_reveil_hyperviseur | bool
+
 - name: Service ansible-pull
   ansible.builtin.template:
     src: ansible-pull.service.j2

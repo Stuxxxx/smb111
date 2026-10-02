@@ -14,6 +14,9 @@ quelque chose ne va pas. Tout est installé par le rôle `admin`.
 | `check.timer` | chaque jour, 06:00 | `playbooks/check.yml` | si un hôte n'est pas conforme (rapport joint) |
 | `ansible-pull.timer` | 10 min (désactivé) | `admins.yml` | en cas d'échec |
 
+Si `pve` est éteint, chaque tâche le réveille par Wake-on-LAN puis le rééteint après
+(`docs/reveil-pve.md`).
+
 Elles s'exécutent dans une **copie du dépôt qui leur est réservée**, `/var/lib/smb111/depot`,
 réalignée sur `main` juste avant chaque passage. Ce qui tourne la nuit est donc toujours l'état
 fusionné et relu, jamais une branche en cours dans le clone de quelqu'un.
