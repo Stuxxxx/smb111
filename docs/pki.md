@@ -132,7 +132,7 @@ permettrait d'usurper les services du SI.
 | Champ | Valeur |
 |---|---|
 | Nom | `SMB111 Racine 2026` |
-| Empreinte SHA-256 | `<à reporter après pki-init.yml>` |
+| Empreinte SHA-256 | `43:B3:1D:BB:D7:11:47:28:68:6B:3F:4C:C7:0E:F1:C9:F6:FC:EE:EC:A8:AD:82:FF:9A:41:C1:37:59:15:E1:5E` |
 
 ```bash
 openssl x509 -in racine.crt -noout -fingerprint -sha256     # Linux, macOS
