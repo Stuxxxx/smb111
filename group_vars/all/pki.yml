@@ -6,7 +6,7 @@
 #
 # Les certificats des CA sont publics et versionnés dans pki/. La clé de
 # l'intermédiaire y est aussi, chiffrée par ansible-vault ; celle de la racine
-# est hors ligne (clé USB). Création : playbooks/pki-init.yml.
+# est hors de rasb, sur le poste d'un responsable. Création : playbooks/pki-init.yml.
 pki_dir: "{{ inventory_dir }}/pki"
 
 pki_organisation: "SMB111"

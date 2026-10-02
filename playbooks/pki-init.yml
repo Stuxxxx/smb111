@@ -2,14 +2,14 @@
 # Création de la PKI du SI, depuis rasb, dans son clone du dépôt.
 #
 #   ansible-playbook playbooks/pki-init.yml
-#   ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire -e pki_racine_cle=/media/usb/racine.key
+#   ansible-playbook playbooks/pki-init.yml -e regenerer=intermediaire
 #   ansible-playbook playbooks/pki-init.yml -e regenerer=tout
 #
 # Produit :
 #   pki/racine.crt, pki/intermediaire.crt   certificats publics, à commiter
 #   pki/intermediaire.key                   clé chiffrée par ansible-vault, à commiter
 #   pki_racine_cle                          clé de la racine, chiffrée, HORS du dépôt :
-#                                           à ranger sur une clé USB, puis à effacer de rasb
+#                                           à rapatrier sur son poste, puis à effacer de rasb
 #
 # Une PKI existante n'est jamais écrasée sans le demander : la remplacer invalide
 # tous les certificats émis. regenerer=intermediaire garde la racine (sa clé est
@@ -26,7 +26,7 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     regenerer: ""
     # Clé de la racine, chiffrée : écrite ici à la création, lue ici pour signer un
-    # nouvel intermédiaire (pointer alors vers la clé USB)
+    # nouvel intermédiaire (la renvoyer alors ici depuis son poste, docs/pki.md)
     pki_racine_cle: "{{ lookup('ansible.builtin.env', 'HOME') }}/pki-racine/racine.key"
     # Contrainte de noms commune aux deux CA (RFC 5280, critique)
     pki_contrainte_noms:
@@ -66,8 +66,8 @@
       ansible.builtin.assert:
         that: pki_cle_racine.stat.exists
         fail_msg: >-
-          Clé de la racine introuvable ({{ pki_racine_cle }}). Brancher la clé USB et
-          l'indiquer : -e pki_racine_cle=/media/<usb>/racine.key
+          Clé de la racine introuvable ({{ pki_racine_cle }}). La renvoyer depuis son
+          poste (docs/pki.md, étape 2), ou indiquer son emplacement : -e pki_racine_cle=...
         quiet: true
       when: not creer_racine
 
@@ -236,6 +236,6 @@
           - "  head -1 pki/intermediaire.key          # doit afficher $ANSIBLE_VAULT;1.1;AES256"
           - "Empreinte SHA-256 de la racine, à reporter dans docs/pki.md :"
           - "  {{ pki_racine_info.fingerprints.sha256 | upper }}"
-          - "{{ ('Clé de la racine : ' ~ pki_racine_cle ~ ' -> la copier sur une clé USB, puis : shred -u ' ~ pki_racine_cle) if creer_racine else '' }}"
+          - "{{ ('Clé de la racine : ' ~ pki_racine_cle ~ ' -> la rapatrier sur son poste (scp rasb:pki-racine/racine.key .), puis : shred -u ' ~ pki_racine_cle) if creer_racine else '' }}"
           - "Commiter : git add -A pki/ docs/pki.md && git commit"
           - "Puis : ansible-playbook site.yml --tags pki,keycloak"
