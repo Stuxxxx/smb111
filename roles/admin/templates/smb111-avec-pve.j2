@@ -1,0 +1,38 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Exécute une tâche programmée avec l'hyperviseur allumé : s'il est éteint, le
+# réveille (Wake-on-LAN), attend que les machines répondent, lance la tâche,
+# puis le rééteint. S'il était déjà allumé, il le reste.
+#
+#   smb111-avec-pve ansible-playbook playbooks/check.yml
+set -uo pipefail
+
+# Une tâche à la fois : celle qui attend ne démarre qu'une fois l'hyperviseur
+# rééteint par la précédente, et le réveille à son tour si besoin.
+exec 9>"{{ admin_reveil_verrou }}"
+flock 9
+
+hote="{{ pve_ip_lan }}"
+repond() { timeout 2 bash -c ": > /dev/tcp/$hote/22" 2>/dev/null; }
+
+reveille=0
+if ! repond; then
+  echo "Hyperviseur éteint : réveil avant la tâche."
+  {{ admin_reveil_commande }} || exit 1
+  reveille=1
+  # Les VM démarrent après l'hyperviseur : la tâche part quand toutes répondent
+  ansible all -o -m ansible.builtin.wait_for_connection -a "timeout={{ admin_reveil_attente }}" \
+    || echo "Certaines machines ne répondent pas encore, la tâche est lancée quand même."
+fi
+
+"$@"
+rc=$?
+
+if [ "$reveille" = 1 ]; then
+  echo "Extinction de l'hyperviseur, éteint avant la tâche."
+  # Lancée en arrière-plan sur pve : la connexion se coupe pendant l'arrêt
+  ansible {{ admin_reveil_hote }} -o -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl poweroff" \
+    || echo "Extinction de l'hyperviseur impossible : il reste allumé." >&2
+fi
+
+exit "$rc"
