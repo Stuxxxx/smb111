@@ -17,6 +17,11 @@ fw_lien_ports_internes: [22, 6443]
 fw_lien_postes: "{{ reseau_wg0 }}"
 fw_services_web_admin: "{{ services_web_admin }}"
 
+# Supervision : seule exception au réseau local interdit, les agents des VM
+# envoient métriques et journaux à sup (docs/supervision.md). "" = aucune.
+fw_supervision_ip: "{{ supervision_ip | default('') }}"
+fw_supervision_ports: "{{ [supervision_port_metriques, supervision_port_journaux] if supervision_ip is defined else [] }}"
+
 # Destinations interdites aux VM : le réseau local (box, hyperviseur, postes).
 # Seul Internet leur est accessible, via la NAT.
 fw_destinations_interdites: ["192.168.1.0/24"]

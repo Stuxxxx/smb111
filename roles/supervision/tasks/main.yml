@@ -1,0 +1,247 @@
+---
+- name: Le mot de passe administrateur de Grafana est dans le vault
+  ansible.builtin.assert:
+    that: supervision_grafana_admin_mdp | length >= 12
+    fail_msg: >-
+      vault_grafana_admin_mdp manquant ou trop court (12 caractères minimum) :
+      l'ajouter avec ansible-vault edit group_vars/all/vault.yml (docs/supervision.md).
+    quiet: true
+
+# --- Système ----------------------------------------------------------------
+# pve2 est mis en veille la nuit : au réveil, l'horloge de la VM retarde de
+# plusieurs heures. chrony la recale d'un coup (makestep sans limite) au lieu
+# de la rattraper lentement, sinon Prometheus rejetterait les échantillons.
+- name: Paquets de la VM
+  ansible.builtin.apt:
+    name:
+      - chrony
+      - qemu-guest-agent
+      - nftables
+      - python3-cryptography
+    state: present
+
+- name: Recalage immédiat de l'horloge après une mise en veille
+  ansible.builtin.copy:
+    dest: /etc/chrony/conf.d/smb111.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible — toute modification manuelle sera écrasée
+      # pve2 est mis en veille la nuit : au réveil, recaler l'heure d'un coup,
+      # quel que soit l'écart, plutôt que de la rattraper lentement
+      makestep 1 -1
+  notify: restart chrony
+
+- name: Agent QEMU et chrony démarrés
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop: [qemu-guest-agent, chrony]
+
+- name: Pare-feu de sup
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: nft -c -f %s
+  notify: restart nftables
+
+- name: nftables démarré au démarrage
+  ansible.builtin.systemd_service:
+    name: nftables
+    state: started
+    enabled: true
+
+# --- Docker -----------------------------------------------------------------
+- name: Répertoire des clés des dépôts APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# Module deb822_repository
+- name: Bibliothèque python3-debian
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+
+- name: Dépôt APT de Docker
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: "{{ supervision_docker_depot }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: stable
+    signed_by: "{{ supervision_docker_cle }}"
+  register: supervision_depot_docker
+
+- name: Paquets Docker
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: "{{ supervision_depot_docker is changed }}"
+
+# Les journaux des conteneurs vont dans journald : Alloy les envoie à Loki
+# comme ceux du système
+- name: Configuration du démon Docker
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {
+        "log-driver": "journald",
+        "live-restore": true
+      }
+  notify: restart docker
+
+- name: Docker démarré au démarrage
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+# --- Certificat -------------------------------------------------------------
+- name: Certificat de sup, émis par la PKI du SI
+  ansible.builtin.import_role:
+    name: certificat
+  vars:
+    certificat_nom: "{{ supervision_hote }}"
+    certificat_dns: ["{{ supervision_nom }}"]
+
+# --- Configuration des services ---------------------------------------------
+- name: Répertoires de configuration
+  ansible.builtin.file:
+    path: "{{ supervision_dir }}/{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - prometheus
+    - prometheus/regles
+    - alertmanager
+    - loki
+    - nginx
+    - grafana/provisioning/datasources
+    - grafana/provisioning/dashboards
+    - grafana/provisioning/alerting
+    - grafana/tableaux
+
+- name: Répertoires des données
+  ansible.builtin.file:
+    path: "{{ supervision_donnees }}/{{ item.key }}"
+    state: directory
+    owner: "{{ item.value }}"
+    group: "{{ item.value }}"
+    mode: "0750"
+  loop: "{{ supervision_uid | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Configuration de Prometheus
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ supervision_dir }}/prometheus/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: prometheus.yml.j2, dest: prometheus.yml }
+    - { src: regles.yml.j2, dest: regles/smb111.yml }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: restart prometheus
+
+# Contient le mot de passe d'application du compte d'envoi : lisible par root
+# et par l'utilisateur du conteneur seulement
+- name: Configuration d'Alertmanager
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ supervision_dir }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: "{{ supervision_uid.alertmanager }}"
+    mode: "0640"
+  no_log: true
+  notify: restart alertmanager
+
+- name: Configuration de Loki
+  ansible.builtin.template:
+    src: loki.yml.j2
+    dest: "{{ supervision_dir }}/loki/loki.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart loki
+
+- name: Configuration de nginx
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ supervision_dir }}/nginx/nginx.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart nginx
+
+- name: Sources de données et tableaux de bord de Grafana
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ supervision_dir }}/grafana/provisioning/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: grafana-sources.yml.j2, dest: datasources/smb111.yml }
+    - { src: grafana-tableaux.yml.j2, dest: dashboards/smb111.yml }
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: restart grafana
+
+# Relus par Grafana toutes les 30 s : pas de redémarrage
+- name: Tableaux de bord
+  ansible.builtin.copy:
+    src: tableaux/
+    dest: "{{ supervision_dir }}/grafana/tableaux/"
+    owner: root
+    group: root
+    mode: "0644"
+
+# Lu par le démon Docker (root) : contient le mot de passe administrateur
+- name: Environnement de Grafana
+  ansible.builtin.template:
+    src: grafana.env.j2
+    dest: "{{ supervision_dir }}/grafana/grafana.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: restart grafana
+
+- name: Description des conteneurs
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ supervision_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+# Recrée les conteneurs dont l'image ou la description a changé
+- name: Conteneurs de la supervision
+  community.docker.docker_compose_v2:
+    project_src: "{{ supervision_dir }}"
+    pull: missing
+    state: present
+    wait: true
+    wait_timeout: 300
+  when: not ansible_check_mode

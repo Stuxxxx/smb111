@@ -1,0 +1,73 @@
+---
+# Le nom de sup n'est servi que par le DNS de fw : les machines du réseau local
+# (rasb, pve, pve2) ne le connaissent pas. Le certificat de sup porte ce nom.
+- name: Nom de la supervision
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '\s{{ supervision_nom | regex_escape }}(\s|$)'
+    line: "{{ supervision_ip }} {{ supervision_nom }} {{ supervision_hote }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: alloy_enabled | bool
+
+- name: Répertoire des clés des dépôts APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: alloy_enabled | bool
+
+# Module deb822_repository
+- name: Bibliothèque python3-debian
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+  when: alloy_enabled | bool
+
+- name: Dépôt APT de Grafana
+  ansible.builtin.deb822_repository:
+    name: grafana
+    types: deb
+    uris: "{{ alloy_depot_url }}"
+    suites: stable
+    components: main
+    signed_by: "{{ alloy_depot_cle }}"
+  register: alloy_depot
+  when: alloy_enabled | bool
+
+- name: Paquet alloy
+  ansible.builtin.apt:
+    name: alloy
+    state: present
+    update_cache: "{{ alloy_depot is changed }}"
+  when: alloy_enabled | bool
+
+# Lecture du journal systemd (loki.source.journal)
+- name: Accès d'alloy au journal
+  ansible.builtin.user:
+    name: alloy
+    groups: [systemd-journal, adm]
+    append: true
+  notify: restart alloy
+  when: alloy_enabled | bool and not ansible_check_mode
+
+- name: Configuration d'alloy
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: /etc/alloy/config.alloy
+    owner: root
+    group: alloy
+    mode: "0640"
+  notify: restart alloy
+  when: alloy_enabled | bool and not ansible_check_mode
+
+# Écoute par défaut sur 127.0.0.1:12345 (interface de débogage) : rien d'exposé
+- name: Service alloy
+  ansible.builtin.systemd_service:
+    name: alloy
+    state: started
+    enabled: true
+  when: alloy_enabled | bool and not ansible_check_mode

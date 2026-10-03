@@ -51,3 +51,10 @@ admin_notifications_enabled: true
 admin_notifier: /usr/local/bin/smb111-notifier
 admin_notifier_echec: /usr/local/bin/smb111-notifier-echec
 admin_notification_destinataires: "{{ notification_destinataires_fichier }}"
+
+# Contrôle de veille de la supervision (docs/supervision.md) : vérifie que sup
+# envoie toujours son alerte permanente Watchdog, sinon prévient les admins
+admin_veille_supervision_enabled: false
+admin_veille_commande: /usr/local/bin/smb111-veille-supervision
+admin_veille_intervalle: 10min
+admin_veille_echecs: 2           # échecs de suite avant l'e-mail

@@ -1,0 +1,67 @@
+// Géré par Ansible — toute modification manuelle sera écrasée
+// Agent de supervision de {{ alloy_instance }} : métriques du système et
+// journal systemd, envoyés à {{ supervision_nom }} (docs/supervision.md).
+
+// --- Métriques -------------------------------------------------------------
+prometheus.exporter.unix "systeme" {
+  enable_collectors = {{ alloy_collecteurs | to_json }}
+}
+
+prometheus.scrape "systeme" {
+  targets         = prometheus.exporter.unix.systeme.targets
+  job_name        = "noeud"
+  scrape_interval = "{{ alloy_intervalle }}"
+  forward_to      = [prometheus.relabel.instance.receiver]
+}
+
+// Le nom de l'inventaire plutôt que host:port : c'est lui que citent les alertes
+prometheus.relabel "instance" {
+  forward_to = [prometheus.remote_write.sup.receiver]
+
+  rule {
+    target_label = "instance"
+    replacement  = "{{ alloy_instance }}"
+  }
+}
+
+prometheus.remote_write "sup" {
+  endpoint {
+    url = "{{ alloy_url_metriques }}"
+
+    tls_config {
+      ca_file = "{{ alloy_ca }}"
+    }
+  }
+}
+
+// --- Journaux --------------------------------------------------------------
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "niveau"
+  }
+}
+
+loki.source.journal "journal" {
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  labels        = { host = "{{ alloy_instance }}", job = "journal" }
+  forward_to    = [loki.write.sup.receiver]
+}
+
+loki.write "sup" {
+  endpoint {
+    url = "{{ alloy_url_journaux }}"
+
+    tls_config {
+      ca_file = "{{ alloy_ca }}"
+    }
+  }
+}
