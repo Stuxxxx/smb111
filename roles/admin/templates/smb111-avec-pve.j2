@@ -23,6 +23,11 @@ if ! repond; then
   # Les VM démarrent après l'hyperviseur : la tâche part quand toutes répondent
   ansible all -m ansible.builtin.wait_for_connection -a "timeout={{ admin_reveil_attente }}" \
     || echo "Certaines machines ne répondent pas encore, la tâche est lancée quand même."
+  # Au démarrage, l'heure n'est synchronisée qu'après quelques instants (fw sort
+  # sur Internet, les VM internes passent par lui) : check.yml la contrôle.
+  ansible all -m ansible.builtin.shell -a "for _ in \$(seq {{ (admin_reveil_attente_ntp | int / 5) | int }}); do
+      [ \"\$(timedatectl show -p NTPSynchronized --value)\" = yes ] && exit 0; sleep 5; done; exit 1" \
+    || echo "Heure pas encore synchronisée partout, la tâche est lancée quand même."
 fi
 
 "$@"
