@@ -27,7 +27,8 @@ est déjà allumé, elle le dit et ne fait rien.
 le contrôle (06:00) le réveillent eux-mêmes. Chaque tâche passe par `smb111-avec-pve` sur `rasb` :
 
 1. si `pve` est éteint, `reveil-pve` le rallume, puis la tâche attend que toutes les machines
-   répondent (10 minutes au plus, `admin_reveil_attente`) ;
+   répondent (10 minutes au plus, `admin_reveil_attente`), puis que leur heure soit synchronisée
+   (5 minutes au plus, `admin_reveil_attente_ntp`), sans quoi `check.yml` signalerait l'horloge ;
 2. la tâche s'exécute normalement ;
 3. si `pve` était éteint au départ, il est rééteint (`systemctl poweroff`). S'il était allumé, il
    le reste.
