@@ -2,6 +2,7 @@ collections:
   - name: ansible.posix
   - name: community.general
   - name: community.crypto
+  - name: community.docker
   - name: kubernetes.core
   - name: community.proxmox
   - name: community.postgresql

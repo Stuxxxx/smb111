@@ -1,0 +1,61 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Contrôle de veille de la supervision (docs/supervision.md). Prometheus, sur
+# sup, envoie en permanence l'alerte « Watchdog » à Alertmanager : si elle
+# n'y est plus, ou si sup ne répond pas, c'est la supervision elle-même qui
+# est en panne, et elle ne peut pas le dire. rasb prévient alors les admins.
+#
+# Un e-mail au passage en panne, un autre au rétablissement, jamais entre les
+# deux. Rien n'est vérifié quand pve2 (qui porte sup) est éteint ou en veille.
+set -uo pipefail
+
+etat_dir="${STATE_DIRECTORY:-/var/lib/smb111-veille}"
+fichier_etat="$etat_dir/etat"
+fichier_echecs="$etat_dir/echecs"
+seuil={{ admin_veille_echecs }}
+
+repond() { timeout 2 bash -c ": > /dev/tcp/$1/22" 2>/dev/null; }
+
+if ! repond {{ pve2_ip_lan }}; then
+  echo "pve2 éteint ou en veille : supervision arrêtée volontairement, rien à vérifier."
+  exit 0
+fi
+
+reponse="$(curl --silent --show-error --fail --max-time 10 \
+  --cacert /usr/local/share/ca-certificates/smb111-racine.crt \
+  'https://{{ supervision_nom }}:{{ supervision_port_alertes }}/api/v2/alerts?active=true&filter=alertname%3D%22Watchdog%22' 2>&1)"
+code=$?
+
+if [ "$code" -eq 0 ] && [ "$(jq 'length' <<<"$reponse" 2>/dev/null || echo 0)" -ge 1 ]; then
+  echo "Supervision en état de marche : alerte Watchdog reçue."
+  echo 0 > "$fichier_echecs"
+  if [ "$(cat "$fichier_etat" 2>/dev/null)" = "panne" ]; then
+    echo "La supervision fonctionne de nouveau : l'alerte permanente Watchdog est revenue sur {{ supervision_nom }}." \
+      | {{ admin_notifier }} "Supervision rétablie"
+  fi
+  echo ok > "$fichier_etat"
+  exit 0
+fi
+
+if [ "$code" -ne 0 ]; then
+  cause="sup ne répond pas : $reponse"
+else
+  cause="sup répond, mais l'alerte Watchdog est absente : Prometheus ne calcule plus ses règles ou ne joint plus Alertmanager."
+fi
+echecs=$(( $(cat "$fichier_echecs" 2>/dev/null || echo 0) + 1 ))
+echo "$echecs" > "$fichier_echecs"
+echo "Échec $echecs/$seuil : $cause"
+
+# Quelques échecs de suite avant de prévenir : au réveil de pve2, sup a besoin
+# d'un moment pour recalculer ses règles
+if [ "$echecs" -ge "$seuil" ] && [ "$(cat "$fichier_etat" 2>/dev/null)" != "panne" ]; then
+  {
+    echo "La supervision ne fonctionne plus : aucune alerte ne partira tant qu'elle n'est pas réparée."
+    echo
+    echo "$cause"
+    echo
+    echo "Constaté $echecs fois de suite par rasb (contrôle toutes les {{ admin_veille_intervalle }})."
+    echo "Sur sup : sudo docker compose -f /opt/supervision/compose.yml ps"
+  } | {{ admin_notifier }} "Supervision en panne"
+  echo panne > "$fichier_etat"
+fi

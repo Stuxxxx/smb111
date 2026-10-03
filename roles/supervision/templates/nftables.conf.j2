@@ -1,0 +1,42 @@
+#!/usr/sbin/nft -f
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Pare-feu de sup. Pas de « flush ruleset » : il effacerait les règles de
+# Docker. Seule la table smb111 est remplacée.
+table inet smb111
+delete table inet smb111
+
+table inet smb111 {
+  set admin {
+    type ipv4_addr
+    elements = { {{ supervision_admin | join(', ') }} }
+  }
+
+  # Machines dont les agents envoient métriques et journaux
+  set agents {
+    type ipv4_addr
+    elements = { {{ (supervision_sources + supervision_admin) | unique | join(', ') }} }
+  }
+
+  chain input {
+    type filter hook input priority filter; policy drop;
+
+    ct state established,related accept
+    ct state invalid drop
+    # Les services écoutent sur 127.0.0.1 ; l'agent de sup s'envoie à lui-même
+    iif "lo" accept
+
+    ip protocol icmp icmp type { echo-request, destination-unreachable, time-exceeded } limit rate 10/second accept
+    ip6 nexthdr icmpv6 icmpv6 type { echo-request, destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+
+    # Administration par rasb : SSH, Grafana (postes de wg0 relayés), lecture des alertes
+    ip saddr @admin tcp dport { 22, {{ supervision_port_grafana }}, {{ supervision_port_alertes }} } accept
+
+    # Réception des métriques et des journaux
+    ip saddr @agents tcp dport { {{ supervision_port_metriques }}, {{ supervision_port_journaux }} } accept
+
+    # Diffusions du réseau local : rejetées sans journal
+    meta pkttype { broadcast, multicast } drop
+
+    limit rate 10/minute log prefix "sup-input-rejet: " level info
+  }
+}

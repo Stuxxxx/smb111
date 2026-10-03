@@ -35,7 +35,7 @@ quorum avec des ressources HA se redémarre de force.
 | `sshd` des nœuds | `root` par clé depuis les autres nœuds seulement (migration, consoles), `PermitRootLogin no` partout ailleurs |
 | `fail2ban` des nœuds | `rasb` et les nœuds jamais bannis |
 | `rasb` (wg0) | les postes `wg0` ne joignent pas `pve2` en direct (`wg_lan_interdits`) |
-| `provision.yml` | les VM sont créées sur le premier nœud (`pve`) seulement |
+| `provision.yml` | les VM sont clonées sur `pve`, puis migrées vers le nœud de leur champ `node` (`sup` sur `pve2`) |
 | `maintenance.yml` | `pve2` mis à jour comme `pve`, sans redémarrage automatique |
 
 La création du cluster elle-même (`pvecm`) se fait à la main, une seule fois.
@@ -107,4 +107,5 @@ ssh rasb reveil-pve                              # les deux répondent
 - `local-lvm` reste propre à chaque nœud : déplacer une VM recopie son disque (VM arrêtée, ou en
   ligne avec `--with-local-disks`). Pas de bascule automatique.
 - `vmbr1` de `pve` et `vmbr1` de `pve2` ne sont pas reliés : une VM interne déplacée sur `pve2` ne
-  voit plus `fw`, qui reste sur `pve`.
+  voit plus `fw`, qui reste sur `pve`. C'est pourquoi `sup`, sur `pve2`, est branchée sur le réseau
+  local ([supervision.md](supervision.md)).
