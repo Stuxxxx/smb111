@@ -88,6 +88,10 @@ pvecm add 192.168.1.180 --link0 192.168.1.181   # mot de passe root de pve, empr
 pvecm status                                     # Nodes: 2, Quorate: Yes
 ```
 
+`pvecm` se lance **en root** (`sudo -i`) : en compte nominatif, il échoue avec
+`ipcc_send_rec failed`. S'il répond `hostname verification failed`, relancer en donnant
+l'empreinte affichée à la première tentative : `pvecm add … --fingerprint <empreinte>`.
+
 Puis, depuis `rasb`, `ansible-playbook site.yml --limit pve,pve2 --tags pve_firewall` : le pare-feu
 est maintenant commun au cluster.
 
