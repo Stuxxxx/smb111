@@ -1,4 +1,4 @@
 # Géré par Ansible — toute modification manuelle sera écrasée
 {% set tache_description = "Contrôle de conformité du parc" %}
-{% set tache_commande = admin_ansible_bin ~ "/ansible-playbook playbooks/check.yml -e check_echec_si_non_conforme=true" %}
+{% set tache_commande = admin_ansible_bin ~ "/ansible-playbook playbooks/check.yml -e check_notifier=true" %}
 {% include "_tache-programmee.j2" %}
