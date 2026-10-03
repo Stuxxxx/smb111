@@ -24,8 +24,15 @@ ssh rasb reveil-pve
 La commande envoie un paquet à chaque nœud éteint, puis attend qu'ils répondent en SSH (5 minutes
 au plus). Un nœud déjà allumé est laissé tel quel.
 
-Éteindre : `ssh pve sudo poweroff` et `ssh pve2 sudo systemctl suspend` (jamais `poweroff` pour
-`pve2`, son Wake-on-LAN ne marche pas depuis l'arrêt complet).
+Éteindre :
+
+```bash
+ssh rasb extinction-pve          # les deux : arrêt de pve, puis veille de pve2
+ssh rasb extinction-pve pve2     # seulement ceux nommés
+```
+
+`pve` est arrêté d'abord (il garde le quorum pendant l'arrêt de ses VM), puis `pve2` est mis en
+veille. Jamais de `poweroff` sur `pve2` : son Wake-on-LAN ne marche pas depuis l'arrêt complet.
 
 ## Les tâches de nuit avec pve éteint
 
@@ -37,9 +44,9 @@ sur `rasb` :
    répondent (10 minutes au plus, `admin_reveil_attente`), puis que leur heure soit synchronisée
    (5 minutes au plus, `admin_reveil_attente_ntp`), sans quoi `check.yml` signalerait l'horloge ;
 2. la tâche s'exécute normalement ;
-3. les nœuds éteints au départ sont rééteints selon `wol_extinction` (`host_vars`) : `pve` est
-   arrêté (`poweroff`), puis, une fois qu'il ne répond plus, `pve2` est mis en veille (`suspend`).
-   Un nœud allumé au départ le reste.
+3. les nœuds éteints au départ sont rééteints par `extinction-pve`, selon `wol_extinction`
+   (`host_vars`) : `pve` est arrêté (`poweroff`), puis, une fois qu'il ne répond plus, `pve2` est
+   mis en veille (`suspend`). Un nœud allumé au départ le reste.
 
 Les tâches passent une par une (verrou commun) : celle qui attend part une fois `pve` rééteint,
 et le réveille à son tour. Le dimanche, `pve` démarre donc trois fois. Un redémarrage demandé
@@ -58,7 +65,7 @@ de chaque machine : il suffit qu'elle soit allumée de temps en temps.
 |---|---|
 | `pve`, `pve2` | service `wol-<carte>` : `ethtool -s <carte> wol g` à chaque démarrage (le pilote peut remettre le réglage à `d`) ; carte `wol_interface`, `eno1` par défaut, `nic0` pour `pve2` |
 | `rasb` | paquet `wakeonlan`, commande `/usr/local/bin/reveil-pve` |
-| `rasb` | commande `/usr/local/bin/smb111-avec-pve` (rôle `admin`), qui encadre les tâches de nuit |
+| `rasb` | commandes `/usr/local/bin/extinction-pve` et `/usr/local/bin/smb111-avec-pve` (rôle `admin`), qui éteint les nœuds et encadre les tâches de nuit |
 | `rasb` | MAC de chaque nœud relevée pendant qu'il est allumé, dans `/etc/smb111/wol/<nœud>.mac` |
 
 Mise en place ou mise à jour : `ansible-playbook site.yml --limit pve,pve2 --tags wol` (nœuds

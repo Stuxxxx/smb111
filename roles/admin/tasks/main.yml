@@ -35,13 +35,18 @@
   become_user: "{{ admin_pull_user }}"
   when: admin_maintenance_enabled or admin_check_enabled or admin_sauvegarde_enabled
 
-- name: Commande de réveil de l'hyperviseur pour les tâches programmées
+- name: Commandes d'extinction des hyperviseurs et d'encadrement des tâches programmées
   ansible.builtin.template:
-    src: smb111-avec-pve.j2
-    dest: "{{ admin_avec_pve }}"
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
     owner: root
     group: admins
     mode: "0750"
+  loop:
+    - { src: extinction-pve.j2, dest: "{{ admin_extinction_commande }}" }
+    - { src: smb111-avec-pve.j2, dest: "{{ admin_avec_pve }}" }
+  loop_control:
+    label: "{{ item.dest }}"
   when: admin_reveil_hyperviseur | bool
 
 - name: Service ansible-pull
