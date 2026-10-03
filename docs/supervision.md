@@ -122,7 +122,9 @@ Les journaux des conteneurs de `sup` y sont aussi (pilote `journald` de Docker).
 
 ## Mise en place
 
-Tout se lance depuis `rasb`, dans son clone du dépôt.
+Tout se lance depuis `rasb`, dans son clone du dépôt. Les commandes sur `sup` passent par Ansible
+(compte `ansible`) : depuis `rasb`, ton compte n'a pas la clé de `keys/` (celle de ton PC). En SSH
+depuis ton PC : `ssh -J rasb sup`.
 
 ### 1. Prérequis
 
@@ -160,7 +162,7 @@ ansible-playbook site.yml --limit sup                       # 2e fois : changed=
 ### 4. Vérifier
 
 ```bash
-ssh sup sudo docker compose -f /opt/supervision/compose.yml ps        # 5 conteneurs « running »
+ansible sup -b -m shell -a 'docker compose -f /opt/supervision/compose.yml ps'   # 5 conteneurs « running »
 curl -s --cacert pki/racine.crt https://sup.smb111.lan:9093/api/v2/alerts | jq '.[].labels.alertname'
 # "Watchdog" (et rien d'autre si tout va bien)
 ```
@@ -174,8 +176,8 @@ Puis ouvrir Grafana : chaque machine doit apparaître dans les courbes en moins 
 | Changer un seuil, une alerte | modifier le rôle, `ansible-playbook site.yml --limit sup --tags supervision` |
 | Nouveau destinataire (admin ajouté dans Keycloak) | `ansible-playbook site.yml --limit sup --tags supervision` |
 | Mettre à jour une image | changer sa version dans `supervision_images`, même commande |
-| Changer le mot de passe de Grafana | `ssh sup sudo docker exec supervision-grafana-1 grafana cli admin reset-admin-password '<nouveau>'`, puis le vault (la variable ne sert qu'à la création) |
-| Alerte « Supervision en panne » | `ssh sup sudo docker compose -f /opt/supervision/compose.yml ps`, puis `logs <service>` |
+| Changer le mot de passe de Grafana | `ansible sup -b -m shell -a "docker exec supervision-grafana-1 grafana cli admin reset-admin-password '<nouveau>'"`, puis le vault (la variable ne sert qu'à la création) |
+| Alerte « Supervision en panne » | `ansible sup -b -m shell -a 'docker compose -f /opt/supervision/compose.yml ps -a'`, puis `docker logs supervision-<service>-1` |
 | Une machine reste « muette » | `sudo systemctl status alloy` et `journalctl -u alloy -e` sur la machine |
 
 Les données de `sup` (métriques et journaux) ne sont pas sauvegardées : elles se reconstituent,
