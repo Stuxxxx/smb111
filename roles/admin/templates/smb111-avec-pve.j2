@@ -1,25 +1,35 @@
 #!/bin/bash
 # Géré par Ansible — toute modification manuelle sera écrasée
-# Exécute une tâche programmée avec l'hyperviseur allumé : s'il est éteint, le
-# réveille (Wake-on-LAN), attend que les machines répondent, lance la tâche,
-# puis le rééteint. S'il était déjà allumé, il le reste.
+# Exécute une tâche programmée avec les hyperviseurs allumés : s'ils sont
+# éteints, les réveille ensemble (Wake-on-LAN), attend que les machines
+# répondent, lance la tâche, puis les rééteint (arrêt ou veille, selon
+# wol_extinction). Ceux qui étaient déjà allumés le restent.
 #
 #   smb111-avec-pve ansible-playbook playbooks/check.yml
 set -uo pipefail
 
-# Une tâche à la fois : celle qui attend ne démarre qu'une fois l'hyperviseur
-# rééteint par la précédente, et le réveille à son tour si besoin.
+# Une tâche à la fois : celle qui attend ne démarre qu'une fois les hyperviseurs
+# rééteints par la précédente, et les réveille à son tour si besoin.
 exec 9>"{{ admin_reveil_verrou }}"
 flock 9
 
-hote="{{ pve_ip_lan }}"
-repond() { timeout 2 bash -c ": > /dev/tcp/$hote/22" 2>/dev/null; }
+# nom adresse extinction, un hyperviseur par ligne
+hyperviseurs=(
+{% for h in groups['proxmox'] %}
+  "{{ h }} {{ hostvars[h].hyperviseur_ip_lan }} {{ hostvars[h].wol_extinction | default('poweroff') }}"
+{% endfor %}
+)
+repond() { timeout 2 bash -c ": > /dev/tcp/$1/22" 2>/dev/null; }
 
-reveille=0
-if ! repond; then
-  echo "Hyperviseur éteint : réveil avant la tâche."
+eteints=()
+for ligne in "${hyperviseurs[@]}"; do
+  read -r nom ip _ <<<"$ligne"
+  repond "$ip" || eteints+=("$ligne")
+done
+
+if [ -n "${eteints[*]:-}" ]; then
+  echo "Hyperviseur(s) éteint(s) : réveil avant la tâche."
   {{ admin_reveil_commande }} || exit 1
-  reveille=1
   # Les VM démarrent après l'hyperviseur : la tâche part quand toutes répondent
   ansible all -m ansible.builtin.wait_for_connection -a "timeout={{ admin_reveil_attente }}" \
     || echo "Certaines machines ne répondent pas encore, la tâche est lancée quand même."
@@ -33,11 +43,28 @@ fi
 "$@"
 rc=$?
 
-if [ "$reveille" = 1 ]; then
-  echo "Extinction de l'hyperviseur, éteint avant la tâche."
-  # Lancée en arrière-plan sur pve : la connexion se coupe pendant l'arrêt
-  ansible {{ admin_reveil_hote }} -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl poweroff" \
-    || echo "Extinction de l'hyperviseur impossible : il reste allumé." >&2
-fi
+# Extinction de ceux qui étaient éteints avant la tâche. Les arrêts d'abord : un
+# nœud qui arrête ses VM garde ainsi le quorum, les mises en veille ensuite.
+# Lancée en arrière-plan sur le nœud : la connexion se coupe pendant l'arrêt.
+eteindre() {
+  ansible "$1" -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl $2" \
+    || { echo "Extinction de $1 ($2) impossible : il reste allumé." >&2; return 1; }
+}
+arretes=()
+for ligne in "${eteints[@]}"; do
+  read -r nom ip extinction <<<"$ligne"
+  [ "$extinction" = suspend ] && continue
+  echo "Extinction de $nom ($extinction), éteint avant la tâche."
+  eteindre "$nom" "$extinction" && arretes+=("$ip")
+done
+for ip in "${arretes[@]}"; do
+  for _ in $(seq 1 60); do repond "$ip" || break; sleep 3; done
+done
+for ligne in "${eteints[@]}"; do
+  read -r nom ip extinction <<<"$ligne"
+  [ "$extinction" = suspend ] || continue
+  echo "Mise en veille de $nom, en veille avant la tâche."
+  eteindre "$nom" suspend
+done
 
 exit "$rc"

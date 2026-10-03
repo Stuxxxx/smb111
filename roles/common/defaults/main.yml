@@ -11,6 +11,8 @@ fail2ban_maxretry: 3
 fail2ban_bantime: 1h
 fail2ban_findtime: 10m
 fail2ban_ignoreip: "127.0.0.1/8 ::1"
+# Adresses autorisées à se connecter en root (par clé) ; vide = jamais
+ssh_root_depuis: []
 # Mises à jour de sécurité automatiques
 unattended_enabled: true
 unattended_mail: ""            # adresse de notification, vide = aucune

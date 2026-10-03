@@ -1,16 +1,17 @@
 ---
-# Réveil de l'hyperviseur à distance (Wake-on-LAN).
+# Réveil des hyperviseurs à distance (Wake-on-LAN).
 # Le paquet magique part de la machine d'administration, sur le réseau local.
+# Par hyperviseur (host_vars) : hyperviseur_ip_lan, et wol_interface si la
+# carte n'est pas eno1.
 
 # Carte de l'hyperviseur qui reçoit le paquet magique
 wol_interface: eno1
-# Diffusion du réseau local, où se trouvent rasb et l'hyperviseur
+# Diffusion du réseau local, où se trouvent rasb et les hyperviseurs
 wol_broadcast: 192.168.1.255
-# Adresse testée pour savoir si l'hyperviseur a redémarré (SSH, autorisé depuis rasb)
-wol_test_hote: "{{ pve_ip_lan }}"
+# Port testé pour savoir si un hyperviseur a redémarré (SSH, autorisé depuis rasb)
 wol_test_port: 22
 
-# Machine qui envoie le paquet, et emplacement de la MAC qu'elle utilise
+# Machine qui envoie le paquet, et dossier des MAC qu'elle utilise (une par hyperviseur)
 wol_emetteur: "{{ groups['admin'] | first }}"
-wol_fichier_mac: /etc/smb111/pve-wol.mac
+wol_dossier_mac: /etc/smb111/wol
 wol_commande: /usr/local/bin/reveil-pve

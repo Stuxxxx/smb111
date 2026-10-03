@@ -3,3 +3,11 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
 MaxAuthTries 3
+{% if ssh_root_depuis %}
+
+# Seule exception : root par clé depuis ces adresses (nœuds du cluster Proxmox,
+# qui en ont besoin pour la migration et les consoles). Le bloc Match s'arrête
+# à la fin de ce fichier.
+Match Address {{ ssh_root_depuis | join(',') }}
+    PermitRootLogin prohibit-password
+{% endif %}

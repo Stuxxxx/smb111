@@ -9,8 +9,9 @@
 # Prérequis : template debian-13-template (vmid 9000), jeton d'API dans le vault,
 # tunnel wg0 actif vers l'hyperviseur.
 
+# Le premier nœud du cluster (pve) porte les VM ; pve2 n'en reçoit pas.
 - name: Créer les VM sur Proxmox
-  hosts: proxmox
+  hosts: proxmox[0]
   gather_facts: false
   connection: local
 

@@ -16,31 +16,46 @@
     enabled: true
     daemon_reload: true
 
-# Côté machine d'administration : la MAC est relevée ici, pendant que
-# l'hyperviseur est allumé, pour servir quand il ne l'est plus.
-- name: Répertoire de la MAC sur la machine d'administration
+# Côté machine d'administration : la MAC de chaque hyperviseur est relevée ici,
+# pendant qu'il est allumé, pour servir quand il ne l'est plus.
+- name: Répertoire des MAC sur la machine d'administration
   ansible.builtin.file:
-    path: "{{ wol_fichier_mac | dirname }}"
+    path: "{{ wol_dossier_mac }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
   delegate_to: "{{ wol_emetteur }}"
+  run_once: true
 
 - name: MAC de l'hyperviseur
   ansible.builtin.copy:
     content: "{{ ansible_facts[wol_interface].macaddress }}\n"
-    dest: "{{ wol_fichier_mac }}"
+    dest: "{{ wol_dossier_mac }}/{{ inventory_hostname }}.mac"
     owner: root
     group: root
     mode: "0644"
   delegate_to: "{{ wol_emetteur }}"
+
+# Reprise de l'ancien emplacement (un seul hyperviseur) : pve reste réveillable
+# même si le rôle n'est appliqué qu'à pve2. Sans effet une fois fait.
+- name: MAC de pve à l'ancien emplacement
+  ansible.builtin.copy:
+    src: /etc/smb111/pve-wol.mac
+    dest: "{{ wol_dossier_mac }}/pve.mac"
+    remote_src: true
+    force: false
+    mode: "0644"
+  delegate_to: "{{ wol_emetteur }}"
+  run_once: true
+  failed_when: false
 
 - name: Paquet wakeonlan
   ansible.builtin.apt:
     name: wakeonlan
     state: present
   delegate_to: "{{ wol_emetteur }}"
+  run_once: true
 
 - name: Commande reveil-pve
   ansible.builtin.template:
@@ -50,3 +65,4 @@
     group: root
     mode: "0755"
   delegate_to: "{{ wol_emetteur }}"
+  run_once: true
