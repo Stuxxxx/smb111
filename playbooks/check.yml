@@ -18,6 +18,7 @@
 #   check_rapports_dir           dossier des rapports                  (défaut : /var/log/smb111)
 #   check_retention_jours        conservation des rapports, en jours   (défaut : 30)
 #   check_echec_si_non_conforme  code retour ≠ 0 si un hôte est KO     (défaut : false)
+#   check_notifier               rapport HTML envoyé aux admins, conforme ou non (défaut : false)
 #   check_sauvegardes            sauvegardes attendues sur l'hôte : [{nom, dossier, motif}]
 #   check_sauvegarde_heures      âge maximal de la plus récente         (défaut : 26)
 
@@ -413,6 +414,46 @@
             msg: >-
               {{ conformes | length }}/{{ cibles | length }} hôtes conformes,
               rapport : {{ rapports_dir }}/check_{{ horodatage }}.md
+
+        # Rapport envoyé à chaque passage, conforme ou non (timer check.timer)
+        - name: Envoyer le rapport aux administrateurs
+          when: check_notifier | default(false) | bool
+          # Le contrôle est fait : un e-mail qui ne part pas ne doit pas le marquer en échec
+          ignore_errors: true
+          block:
+            - name: Fichier temporaire pour la version HTML
+              ansible.builtin.tempfile:
+                suffix: .html
+              register: rapport_html
+
+            - name: Version HTML du rapport
+              ansible.builtin.template:
+                src: check-rapport.html.j2
+                dest: "{{ rapport_html.path }}"
+                mode: "0600"
+              vars:
+                rapport_date: "{{ now(fmt='%d/%m/%Y · %H:%M') }}"
+
+            - name: Envoi
+              ansible.builtin.command:
+                argv:
+                  - "{{ admin_notifier | default('/usr/local/bin/smb111-notifier') }}"
+                  - --html
+                  - "{{ rapport_html.path }}"
+                  - >-
+                    Contrôle : {{ 'tout est conforme (' ~ (cibles | length | string) ~ '/' ~ (cibles | length | string) ~ ')'
+                                  if not non_conformes
+                                  else 'à voir sur ' ~ non_conformes | join(', ') }}
+                # Version texte, pour les clients qui n'affichent pas le HTML
+                stdin: "{{ lookup('ansible.builtin.file', rapports_dir ~ '/check_' ~ horodatage ~ '.md') }}"
+              changed_when: false
+
+          always:
+            - name: Fichier temporaire retiré
+              ansible.builtin.file:
+                path: "{{ rapport_html.path }}"
+                state: absent
+              when: rapport_html.path is defined
 
         - name: Échec si un hôte n'est pas conforme (exploité par le timer)
           ansible.builtin.fail:

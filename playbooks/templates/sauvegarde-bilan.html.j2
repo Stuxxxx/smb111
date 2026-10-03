@@ -1,0 +1,99 @@
+{#- Bilan de la sauvegarde nocturne envoyé aux administrateurs (playbooks/sauvegarde.yml).
+    Même gabarit que maintenance-bilan.html.j2 : tableaux et styles en ligne.
+    Variables : export_fichier, bilan_taille, bilan_conservees (liste find,
+    triée de la plus récente à la plus ancienne), bilan_date, dossier_rasb. -#}
+{%- macro taille(valeur) -%}
+  {%- set octets = valeur | int -%}
+  {%- if octets >= 1048576 %}{{ '%.1f' | format(octets / 1048576) }} Mo
+  {%- elif octets >= 1024 %}{{ '%.0f' | format(octets / 1024) }} Ko
+  {%- else %}{{ octets }} o{% endif -%}
+{%- endmacro -%}
+{%- set plus_ancienne = bilan_conservees | last if bilan_conservees else none -%}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Sauvegarde SMB111</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+Keycloak sauvegardé ({{ taille(bilan_taille) }}), {{ bilan_conservees | length }} sauvegarde(s) conservée(s) sur rasb.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f7;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+
+  <!-- En-tête -->
+  <tr><td style="background:#0f172a;background-image:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#134e4a 100%);border-radius:16px 16px 0 0;padding:32px 36px 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#5eead4;">SMB111 · Sauvegarde nocturne</td>
+      <td align="right" style="font-size:12px;color:#94a3b8;">{{ bilan_date }}</td>
+    </tr></table>
+    <div style="font-size:28px;line-height:34px;font-weight:700;color:#ffffff;margin:18px 0 6px;">Sauvegarde réussie</div>
+    <div style="font-size:15px;line-height:22px;color:#cbd5e1;">
+      La base de Keycloak (comptes, groupes, double authentification) a été exportée, vérifiée et rapatriée sur rasb.
+    </div>
+  </td></tr>
+
+  <!-- Chiffres clés -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      {%- for valeur, libelle, couleur in [
+            (taille(bilan_taille), 'taille', '#0f172a'),
+            (bilan_conservees | length, 'conservées sur rasb', '#0f766e'),
+            (sauvegarde_retention_jours ~ ' j', 'durée de conservation', '#1d4ed8')] %}
+      <td width="33%" align="center" style="padding:0 4px;">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 6px;">
+          <div style="font-size:24px;line-height:32px;font-weight:700;color:{{ couleur }};">{{ valeur }}</div>
+          <div style="font-size:12px;line-height:16px;color:#64748b;margin-top:4px;">{{ libelle }}</div>
+        </div>
+      </td>
+      {%- endfor %}
+    </tr></table>
+  </td></tr>
+
+  <!-- Détail -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:12px;">Sauvegarde de cette nuit</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;">
+      <tr><td style="padding:16px 18px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td valign="top">
+            <div style="font-size:17px;font-weight:700;color:#0f172a;">idp</div>
+            <div style="font-size:13px;color:#64748b;margin-top:2px;">Fournisseur d'identité (Keycloak)</div>
+          </td>
+          <td valign="top" align="right" style="white-space:nowrap;">
+            <span style="display:inline-block;background:#ecfdf5;color:#047857;font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;">
+              <span style="color:#10b981;">●</span>&nbsp;Sauvegardé
+            </span>
+          </td>
+        </tr></table>
+        <div style="font-family:Consolas,'SFMono-Regular',Menlo,monospace;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;margin-top:12px;color:#0f172a;word-break:break-all;">{{ dossier_rasb }}/{{ export_fichier }}</div>
+        <div style="font-size:13px;line-height:20px;color:#334155;margin-top:10px;">
+          Relecture du fichier (<span style="font-family:Consolas,Menlo,monospace;">pg_restore --list</span>) réussie avant rapatriement.
+          {%- if plus_ancienne %} Plus ancienne sauvegarde conservée : <strong>{{ '%d/%m/%Y' | strftime(plus_ancienne.mtime | int) }}</strong>.{% endif %}
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Pied -->
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 28px 24px;">
+    <div style="font-size:12px;line-height:19px;color:#64748b;">
+      Restaurer : <span style="font-family:Consolas,Menlo,monospace;">ansible-playbook playbooks/restauration.yml</span> (docs/sauvegarde.md).
+      Les {{ sauvegarde_conserver_min }} sauvegardes les plus récentes sont toujours gardées, même au-delà de {{ sauvegarde_retention_jours }} jours.
+    </div>
+    <div style="font-size:12px;line-height:19px;color:#94a3b8;margin-top:10px;">
+      Envoyé par <span style="font-family:Consolas,Menlo,monospace;">playbooks/sauvegarde.yml</span> depuis rasb ·
+      <a href="https://github.com/Stuxxxx/smb111" style="color:#0f766e;text-decoration:none;">Stuxxxx/smb111</a> ·
+      vous le recevez en tant que membre du groupe admins de Keycloak.
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
