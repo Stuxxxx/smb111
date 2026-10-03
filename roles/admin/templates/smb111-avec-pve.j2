@@ -21,7 +21,7 @@ if ! repond; then
   {{ admin_reveil_commande }} || exit 1
   reveille=1
   # Les VM démarrent après l'hyperviseur : la tâche part quand toutes répondent
-  ansible all -o -m ansible.builtin.wait_for_connection -a "timeout={{ admin_reveil_attente }}" \
+  ansible all -m ansible.builtin.wait_for_connection -a "timeout={{ admin_reveil_attente }}" \
     || echo "Certaines machines ne répondent pas encore, la tâche est lancée quand même."
 fi
 
@@ -31,7 +31,7 @@ rc=$?
 if [ "$reveille" = 1 ]; then
   echo "Extinction de l'hyperviseur, éteint avant la tâche."
   # Lancée en arrière-plan sur pve : la connexion se coupe pendant l'arrêt
-  ansible {{ admin_reveil_hote }} -o -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl poweroff" \
+  ansible {{ admin_reveil_hote }} -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl poweroff" \
     || echo "Extinction de l'hyperviseur impossible : il reste allumé." >&2
 fi
 
