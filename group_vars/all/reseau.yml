@@ -5,8 +5,9 @@ passerelle_interne: 10.10.0.1
 fw_ip_externe: 192.168.1.70
 passerelle_externe: 192.168.1.254
 
-# Hyperviseur, vu depuis le réseau local
+# Hyperviseurs du cluster Proxmox, vus depuis le réseau local
 pve_ip_lan: 192.168.1.180
+pve2_ip_lan: 192.168.1.181
 
 # Machine d'administration (rasb), vue depuis le réseau local
 admin_ip_lan: 192.168.1.90

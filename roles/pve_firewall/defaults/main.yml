@@ -5,9 +5,8 @@
 #  - rasb sur le réseau local
 #  - le tunnel wg0 : rasb (Ansible, API) et les postes relayés par rasb, qui
 #    ne laisse passer que le port 8006 entre pairs
-pve_fw_management:
-  - "{{ admin_ip_lan }}"
-  - 10.99.0.0/24
+#  - les nœuds du cluster entre eux (SSH et API ; corosync est ouvert par Proxmox)
+pve_fw_management: "{{ [admin_ip_lan, '10.99.0.0/24'] + pve_cluster_ips | default([]) }}"
 
 # Journalisation des paquets entrants rejetés (nolog, emerg … debug)
 pve_fw_log_entree: info
