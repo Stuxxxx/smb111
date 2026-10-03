@@ -20,6 +20,14 @@ supervision_sources:
   - "{{ pve2_ip_lan }}"
   - "{{ fw_ip_externe }}"
 
+# Connexion à Grafana par Keycloak (OIDC). Le client est créé dans Keycloak par
+# le rôle keycloak_comptes ; son secret est dans le vault (vault_grafana_oidc_secret).
+# Grafana (sur sup) appelle Keycloak (sur idp) pour échanger le code contre un
+# jeton : fw laisse passer sup vers idp, port 443 seulement.
+supervision_oidc_client: grafana
+supervision_oidc_secret: "{{ vault_grafana_oidc_secret | default('') }}"
+supervision_idp_ip: "{{ vms | selectattr('name', 'equalto', 'idp') | map(attribute='ip') | first }}"
+
 # Kubernetes : règles et tableaux de bord du cluster, à activer une fois k3s
 # déployé avec ses collecteurs (kube-state-metrics, Alloy)
 supervision_kubernetes: false

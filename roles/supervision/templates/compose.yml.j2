@@ -56,6 +56,10 @@ services:
       - {{ supervision_dir }}/grafana/provisioning:/etc/grafana/provisioning:ro
       - {{ supervision_dir }}/grafana/tableaux:/etc/grafana/tableaux:ro
       - {{ supervision_donnees }}/grafana:/var/lib/grafana
+      # Racine de la PKI : vérifie le certificat de Keycloak (connexion OIDC)
+      - /usr/local/share/ca-certificates/smb111-racine.crt:/etc/ssl/smb111-racine.crt:ro
+    extra_hosts:
+      - "idp.{{ domaine_interne }}:{{ supervision_idp_ip }}"
     depends_on: [prometheus, loki, alertmanager]
     restart: unless-stopped
 

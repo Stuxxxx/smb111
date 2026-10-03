@@ -56,6 +56,40 @@
     state: started
     enabled: true
 
+# sup est sur le réseau local : idp n'est joignable que par fw, qui ne laisse
+# passer que le port 443 (connexion à Grafana par Keycloak)
+- name: Route vers idp par fw
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/route-idp.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Géré par Ansible — toute modification manuelle sera écrasée
+      [Unit]
+      Description=Route vers idp ({{ supervision_idp_ip }}) par fw, pour la connexion à Grafana par Keycloak
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/usr/sbin/ip route replace {{ supervision_idp_ip }}/32 via {{ fw_ip_externe }}
+      ExecStop=/usr/sbin/ip route del {{ supervision_idp_ip }}/32 via {{ fw_ip_externe }}
+
+      [Install]
+      WantedBy=multi-user.target
+  register: supervision_route_idp
+  when: supervision_oidc | bool
+
+- name: Route vers idp active
+  ansible.builtin.systemd_service:
+    name: route-idp
+    state: "{{ 'restarted' if supervision_route_idp is changed else 'started' }}"
+    enabled: true
+    daemon_reload: "{{ supervision_route_idp is changed }}"
+  when: supervision_oidc | bool and not ansible_check_mode
+
 # --- Docker -----------------------------------------------------------------
 - name: Répertoire des clés des dépôts APT
   ansible.builtin.file:
