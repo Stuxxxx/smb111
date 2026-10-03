@@ -43,28 +43,12 @@ fi
 "$@"
 rc=$?
 
-# Extinction de ceux qui étaient éteints avant la tâche. Les arrêts d'abord : un
-# nœud qui arrête ses VM garde ainsi le quorum, les mises en veille ensuite.
-# Lancée en arrière-plan sur le nœud : la connexion se coupe pendant l'arrêt.
-eteindre() {
-  ansible "$1" -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl $2" \
-    || { echo "Extinction de $1 ($2) impossible : il reste allumé." >&2; return 1; }
-}
-arretes=()
-for ligne in "${eteints[@]}"; do
-  read -r nom ip extinction <<<"$ligne"
-  [ "$extinction" = suspend ] && continue
-  echo "Extinction de $nom ($extinction), éteint avant la tâche."
-  eteindre "$nom" "$extinction" && arretes+=("$ip")
-done
-for ip in "${arretes[@]}"; do
-  for _ in $(seq 1 60); do repond "$ip" || break; sleep 3; done
-done
-for ligne in "${eteints[@]}"; do
-  read -r nom ip extinction <<<"$ligne"
-  [ "$extinction" = suspend ] || continue
-  echo "Mise en veille de $nom, en veille avant la tâche."
-  eteindre "$nom" suspend
-done
+# Extinction de ceux qui étaient éteints avant la tâche (arrêt ou veille)
+if [ -n "${eteints[*]:-}" ]; then
+  noms=()
+  for ligne in "${eteints[@]}"; do read -r nom _ <<<"$ligne"; noms+=("$nom"); done
+  echo "Extinction de ${noms[*]}, éteints avant la tâche."
+  {{ admin_extinction_commande }} "${noms[@]}"
+fi
 
 exit "$rc"
