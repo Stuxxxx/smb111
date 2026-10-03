@@ -1,0 +1,146 @@
+{#- Rapport du contrôle de conformité envoyé aux administrateurs (playbooks/check.yml).
+    Même gabarit que maintenance-bilan.html.j2 : tableaux et styles en ligne.
+    Variables : cibles, conformes, non_conformes, check_ordre, rapport_date,
+    et hostvars[h].check_resultats (ok, detail) pour chaque hôte contrôlé. -#}
+{%- set libelles = {
+  'reboot': 'Redémarrage',
+  'securite': 'Correctifs de sécurité',
+  'ssh': 'SSH',
+  'fail2ban': 'fail2ban',
+  'comptes': 'Comptes',
+  'disque': 'Espace disque',
+  'timers': 'Tâches programmées',
+  'horloge': 'Heure',
+  'wireguard': 'WireGuard',
+  'certificats': 'Certificats',
+  'sauvegarde': 'Sauvegardes',
+} -%}
+{%- set conseils = {
+  'reboot': 'Redémarrer la machine à un moment annoncé (ssh <machine> sudo reboot). Pour fw et idp, la prochaine extinction de pve suffit.',
+  'securite': 'unattended-upgrades les installe dans la journée ; sinon la maintenance du dimanche s\'en charge.',
+  'horloge': 'Souvent passager juste après un démarrage ; à surveiller s\'il se répète.',
+  'sauvegarde': 'Relancer la sauvegarde depuis rasb : sudo systemctl start sauvegarde.service',
+  'disque': 'Faire de la place sur le volume indiqué.',
+} -%}
+{%- set compte = namespace(ko=0, injoignables=0) -%}
+{%- for h in cibles -%}
+  {%- if hostvars[h].check_resultats is defined -%}
+    {%- for nom in check_ordre if not hostvars[h].check_resultats[nom].ok | bool -%}{%- set compte.ko = compte.ko + 1 -%}{%- endfor -%}
+  {%- else -%}{%- set compte.injoignables = compte.injoignables + 1 -%}{%- endif -%}
+{%- endfor -%}
+{%- set ok = non_conformes | length == 0 -%}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Contrôle de conformité SMB111</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+{{ conformes | length }}/{{ cibles | length }} machines conformes{{ ', à voir : ' ~ non_conformes | join(', ') if non_conformes else ', rien à faire' }}.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f7;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+
+  <!-- En-tête -->
+  <tr><td style="background:#0f172a;background-image:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,{{ '#134e4a' if ok else '#7c2d12' }} 100%);border-radius:16px 16px 0 0;padding:32px 36px 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:{{ '#5eead4' if ok else '#fdba74' }};">SMB111 · Contrôle quotidien</td>
+      <td align="right" style="font-size:12px;color:#94a3b8;">{{ rapport_date }}</td>
+    </tr></table>
+    <div style="font-size:28px;line-height:34px;font-weight:700;color:#ffffff;margin:18px 0 6px;">
+      {{ 'Tout est conforme' if ok else (non_conformes | length) ~ ' machine' ~ ('s' if non_conformes | length > 1 else '') ~ ' à voir' }}
+    </div>
+    <div style="font-size:15px;line-height:22px;color:#cbd5e1;">
+      {%- if ok %}Les {{ cibles | length }} machines ont passé les {{ check_ordre | length }} contrôles. Rien à faire.
+      {%- else %}{{ non_conformes | join(', ') }} : le détail et quoi faire sont ci-dessous.{% endif %}
+    </div>
+  </td></tr>
+
+  <!-- Chiffres clés -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      {%- for valeur, libelle, couleur in [
+            (cibles | length, 'machines', '#0f172a'),
+            (conformes | length, 'conformes', '#047857'),
+            (compte.ko, 'points à voir', '#b45309' if compte.ko else '#94a3b8'),
+            (compte.injoignables, 'injoignables', '#b91c1c' if compte.injoignables else '#94a3b8')] %}
+      <td width="25%" align="center" style="padding:0 4px;">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 6px;">
+          <div style="font-size:28px;line-height:32px;font-weight:700;color:{{ couleur }};">{{ valeur }}</div>
+          <div style="font-size:12px;line-height:16px;color:#64748b;margin-top:4px;">{{ libelle }}</div>
+        </div>
+      </td>
+      {%- endfor %}
+    </tr></table>
+  </td></tr>
+
+  <!-- Machines -->
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:12px;">Détail par machine</div>
+    {%- for h in cibles %}
+    {%- set r = hostvars[h].check_resultats | default(none) %}
+    {%- if r is none %}
+      {%- set badge = {'libelle': 'Injoignable', 'fond': '#fef2f2', 'texte': '#b91c1c', 'point': '#ef4444'} %}
+    {%- elif h in conformes %}
+      {%- set badge = {'libelle': 'Conforme', 'fond': '#ecfdf5', 'texte': '#047857', 'point': '#10b981'} %}
+    {%- else %}
+      {%- set badge = {'libelle': 'À voir', 'fond': '#fffbeb', 'texte': '#b45309', 'point': '#f59e0b'} %}
+    {%- endif %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;">
+      <tr><td style="padding:16px 18px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td valign="top">
+            <div style="font-size:17px;font-weight:700;color:#0f172a;">{{ h }}</div>
+          </td>
+          <td valign="top" align="right" style="white-space:nowrap;">
+            <span style="display:inline-block;background:{{ badge.fond }};color:{{ badge.texte }};font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;">
+              <span style="color:{{ badge.point }};">●</span>&nbsp;{{ badge.libelle }}
+            </span>
+          </td>
+        </tr></table>
+        {%- if r is none %}
+        <div style="font-size:13px;color:#b91c1c;margin-top:12px;">Machine non contrôlée : injoignable, ou erreur pendant le contrôle.</div>
+        {%- else %}
+        <div style="margin-top:12px;line-height:26px;">
+          {%- for nom in check_ordre %}
+          {%- set bon = r[nom].ok | bool %}
+          <span style="display:inline-block;font-size:11px;font-weight:600;color:{{ '#047857' if bon else '#b91c1c' }};background:{{ '#ecfdf5' if bon else '#fef2f2' }};border:1px solid {{ '#a7f3d0' if bon else '#fecaca' }};border-radius:6px;padding:1px 7px;margin:0 4px 0 0;">{{ '✓' if bon else '✗' }}&nbsp;{{ libelles[nom] | default(nom) }}</span>
+          {%- endfor %}
+        </div>
+        {%- for nom in check_ordre if not r[nom].ok | bool %}
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:10px;padding:12px 14px;margin-top:10px;">
+          <div style="font-size:13px;font-weight:700;color:#92400e;">{{ libelles[nom] | default(nom) }}</div>
+          <div style="font-size:13px;line-height:19px;color:#78350f;margin-top:4px;">{{ r[nom].detail | replace('**', '') | trim }}</div>
+          {%- if nom in conseils %}
+          <div style="font-size:12px;line-height:18px;color:#92400e;margin-top:6px;"><strong>Que faire :</strong> {{ conseils[nom] | replace('<machine>', h) }}</div>
+          {%- endif %}
+        </div>
+        {%- endfor %}
+        {%- endif %}
+      </td></tr>
+    </table>
+    {%- endfor %}
+  </td></tr>
+
+  <!-- Pied -->
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 28px 24px;">
+    <div style="font-size:12px;line-height:19px;color:#64748b;">
+      Le contrôle tourne chaque jour à 06:00 et ne modifie rien sur les machines.
+      Rapport complet sur rasb : <span style="font-family:Consolas,Menlo,monospace;">/var/log/smb111/dernier.md</span>
+    </div>
+    <div style="font-size:12px;line-height:19px;color:#94a3b8;margin-top:10px;">
+      Envoyé par <span style="font-family:Consolas,Menlo,monospace;">playbooks/check.yml</span> depuis rasb ·
+      <a href="https://github.com/Stuxxxx/smb111" style="color:#0f766e;text-decoration:none;">Stuxxxx/smb111</a> ·
+      vous le recevez en tant que membre du groupe admins de Keycloak.
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

@@ -5,7 +5,8 @@
 #   ansible-playbook playbooks/sauvegarde.yml
 #
 # Programmée chaque nuit par le timer sauvegarde.timer (rôle admin), avant la
-# maintenance. Un échec prévient les administrateurs par e-mail ; check.yml
+# maintenance. Un bilan HTML part à chaque réussite (-e sauvegarde_notifier=true,
+# posé par le timer), un échec prévient les admins par e-mail ; check.yml
 # signale en plus toute sauvegarde de plus de 26 h.
 
 - name: Sauvegarde de Keycloak
@@ -75,3 +76,57 @@
         msg: >-
           Sauvegarde {{ export_fichier }} sur idp et dans {{ dossier_rasb }}
           ({{ sur_rasb.matched }} sauvegarde(s) sur rasb avant nettoyage).
+
+    # --- Bilan envoyé aux administrateurs à chaque sauvegarde réussie -------
+    # (un échec arrête le play avant : c'est notification-echec@ qui prévient)
+    - name: Envoyer le bilan aux administrateurs
+      when: sauvegarde_notifier | default(false) | bool
+      delegate_to: localhost
+      become: false
+      run_once: true
+      # La sauvegarde est faite : un e-mail qui ne part pas ne doit pas la marquer en échec
+      ignore_errors: true
+      block:
+        - name: Sauvegardes conservées sur rasb
+          ansible.builtin.find:
+            paths: "{{ dossier_rasb }}"
+            patterns: "keycloak_*.dump"
+          register: conservees
+
+        - name: Fichier temporaire pour la version HTML
+          ansible.builtin.tempfile:
+            suffix: .html
+          register: bilan_html
+
+        - name: Version HTML du bilan
+          ansible.builtin.template:
+            src: sauvegarde-bilan.html.j2
+            dest: "{{ bilan_html.path }}"
+            mode: "0600"
+          vars:
+            bilan_date: "{{ now(fmt='%d/%m/%Y · %H:%M') }}"
+            bilan_conservees: "{{ conservees.files | sort(attribute='mtime', reverse=true) }}"
+            bilan_taille: >-
+              {{ (conservees.files | selectattr('path', 'search', export_fichier ~ '$')
+                  | map(attribute='size') | first | default(0)) | int }}
+
+        - name: Envoi
+          ansible.builtin.command:
+            argv:
+              - "{{ admin_notifier | default('/usr/local/bin/smb111-notifier') }}"
+              - --html
+              - "{{ bilan_html.path }}"
+              - "Sauvegarde réussie : Keycloak"
+            # Version texte, pour les clients qui n'affichent pas le HTML
+            stdin: |
+              Sauvegarde de Keycloak réussie.
+              Fichier : {{ dossier_rasb }}/{{ export_fichier }}
+              Sauvegardes conservées sur rasb : {{ conservees.matched }}
+          changed_when: false
+
+      always:
+        - name: Fichier temporaire retiré
+          ansible.builtin.file:
+            path: "{{ bilan_html.path }}"
+            state: absent
+          when: bilan_html.path is defined

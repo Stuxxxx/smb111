@@ -9,9 +9,9 @@ quelque chose ne va pas. Tout est installé par le rôle `admin`.
 
 | Timer | Quand | Playbook | E-mail |
 |---|---|---|---|
-| `sauvegarde.timer` | chaque nuit, 02:00 | `playbooks/sauvegarde.yml` | en cas d'échec |
-| `maintenance.timer` | dimanche, 03:00 | `playbooks/maintenance.yml` | **bilan HTML à chaque passage** (gabarit `playbooks/templates/maintenance-bilan.html.j2`), ou échec |
-| `check.timer` | chaque jour, 06:00 | `playbooks/check.yml` | si un hôte n'est pas conforme (rapport joint) |
+| `sauvegarde.timer` | chaque nuit, 02:00 | `playbooks/sauvegarde.yml` | **bilan HTML à chaque réussite** (`playbooks/templates/sauvegarde-bilan.html.j2`), ou échec |
+| `maintenance.timer` | dimanche, 03:00 | `playbooks/maintenance.yml` | **bilan HTML à chaque passage** (`playbooks/templates/maintenance-bilan.html.j2`), ou échec |
+| `check.timer` | chaque jour, 06:00 | `playbooks/check.yml` | **rapport HTML à chaque passage**, conforme ou non (`playbooks/templates/check-rapport.html.j2`), ou échec du playbook |
 | `ansible-pull.timer` | 10 min (désactivé) | `admins.yml` | en cas d'échec |
 
 Si `pve` est éteint, chaque tâche le réveille par Wake-on-LAN puis le rééteint après
@@ -69,7 +69,12 @@ du vault, déjà utilisé par le relais de `fw`). Ils ne dépendent donc ni de `
 | Prévenir d'un échec | `/usr/local/bin/smb111-notifier-echec`, via `notification-echec@.service` |
 
 Chaque service programmé déclare `OnFailure=notification-echec@%n.service` : en cas d'échec,
-les admins reçoivent la fin du journal du service (et le rapport de conformité pour `check`).
+les admins reçoivent un e-mail HTML avec la cause probable (erreurs Ansible, machines
+injoignables) et la fin du journal du service.
+
+Une non-conformité n'est pas un échec : `check.service` se termine normalement et le rapport
+du jour la signale (en-tête orange, « Que faire » pour chaque point). `check.service` n'est
+en échec que si le playbook lui-même n'a pas pu aller au bout.
 
 ### Qui reçoit les e-mails
 

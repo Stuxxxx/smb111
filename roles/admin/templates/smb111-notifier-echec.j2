@@ -2,32 +2,104 @@
 # Géré par Ansible — toute modification manuelle sera écrasée
 # Prévient les administrateurs qu'une tâche programmée a échoué. Appelé par
 # notification-echec@<unité>.service, déclaré en OnFailure= des services.
+# E-mail en HTML (même gabarit que les bilans), avec sa version texte.
 #
 #   smb111-notifier-echec check.service
 set -euo pipefail
 
 unite="${1:?usage : smb111-notifier-echec <unité>}"
 quand="$(date '+%d/%m/%Y à %H:%M')"
+machine="$(hostname)"
 
 case "$unite" in
-  check.service)       sujet="Non-conformité détectée sur le parc" ;;
-  maintenance.service) sujet="Échec de la maintenance du parc" ;;
-  sauvegarde.service)  sujet="Échec de la sauvegarde" ;;
-  *)                   sujet="Échec de $unite" ;;
+  check.service)       tache="Le contrôle de conformité" ; sujet="Échec du contrôle de conformité" ;;
+  maintenance.service) tache="La maintenance du parc"     ; sujet="Échec de la maintenance du parc" ;;
+  sauvegarde.service)  tache="La sauvegarde nocturne"     ; sujet="Échec de la sauvegarde" ;;
+  *)                   tache="La tâche $unite"            ; sujet="Échec de $unite" ;;
 esac
 
+journal="$(journalctl --unit "$unite" --lines 60 --no-pager --output cat)"
+# Lignes qui disent pourquoi : erreurs Ansible et machines injoignables
+cause="$(grep -E '^\[ERROR\]|UNREACHABLE|FAILED!' <<<"$journal" | head -n 5 || true)"
+
+echappe() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+html="$(mktemp --suffix=.html)"
+trap 'rm -f "$html"' EXIT
+
+cat > "$html" <<HTML
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Échec SMB111</title>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">$tache a échoué sur $machine le $quand.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f7;">
+<tr><td align="center" style="padding:32px 12px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:640px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+
+  <tr><td style="background:#0f172a;background-image:linear-gradient(135deg,#0f172a 0%,#1e293b 60%,#7f1d1d 100%);border-radius:16px 16px 0 0;padding:32px 36px 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td style="font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fca5a5;">SMB111 · Tâche en échec</td>
+      <td align="right" style="font-size:12px;color:#94a3b8;">$quand</td>
+    </tr></table>
+    <div style="font-size:28px;line-height:34px;font-weight:700;color:#ffffff;margin:18px 0 6px;">$sujet</div>
+    <div style="font-size:15px;line-height:22px;color:#cbd5e1;">$tache a échoué sur $machine. La cause probable et la fin du journal sont ci-dessous.</div>
+  </td></tr>
+HTML
+
+if [ -n "$cause" ]; then
+  cat >> "$html" <<HTML
+  <tr><td style="background:#ffffff;padding:24px 28px 0;">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #ef4444;border-radius:10px;padding:16px 18px;">
+      <div style="font-size:14px;font-weight:700;color:#991b1b;margin-bottom:8px;">Cause probable</div>
+      <div style="font-family:Consolas,'SFMono-Regular',Menlo,monospace;font-size:12px;line-height:18px;color:#7f1d1d;white-space:pre-wrap;word-break:break-word;">$(echappe <<<"$cause")</div>
+    </div>
+  </td></tr>
+HTML
+fi
+
+cat >> "$html" <<HTML
+  <tr><td style="background:#ffffff;padding:24px 28px 8px;">
+    <div style="font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#64748b;margin-bottom:12px;">Fin du journal de $unite</div>
+    <div style="font-family:Consolas,'SFMono-Regular',Menlo,monospace;font-size:11px;line-height:16px;color:#e2e8f0;background:#0f172a;border-radius:10px;padding:14px 16px;white-space:pre-wrap;word-break:break-word;">$(echappe <<<"$journal")</div>
+  </td></tr>
+
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 28px 24px;">
+    <div style="font-size:12px;line-height:19px;color:#64748b;">
+      Journal complet sur $machine : <span style="font-family:Consolas,Menlo,monospace;">journalctl -u $unite -e</span>
+      &nbsp;·&nbsp; relancer : <span style="font-family:Consolas,Menlo,monospace;">sudo systemctl start $unite</span>
+    </div>
+    <div style="font-size:12px;line-height:19px;color:#94a3b8;margin-top:10px;">
+      Envoyé par smb111-notifier-echec depuis $machine ·
+      <a href="https://github.com/Stuxxxx/smb111" style="color:#0f766e;text-decoration:none;">Stuxxxx/smb111</a> ·
+      vous le recevez en tant que membre du groupe admins de Keycloak.
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>
+HTML
+
+# Version texte, pour les clients qui n'affichent pas le HTML
 {
-  echo "L'exécution programmée « $unite » a échoué sur $(hostname), le $quand."
+  echo "$tache a échoué sur $machine, le $quand."
   echo
-  if [ "$unite" = check.service ] && [ -e {{ admin_rapports_dir }}/dernier.md ]; then
-    echo "=== Rapport de conformité ({{ admin_rapports_dir }}/dernier.md) ==="
-    echo
-    cat {{ admin_rapports_dir }}/dernier.md
+  if [ -n "$cause" ]; then
+    echo "=== Cause probable ==="
+    echo "$cause"
     echo
   fi
   echo "=== Fin du journal de $unite ==="
   echo
-  journalctl --unit "$unite" --lines 60 --no-pager --output cat
+  echo "$journal"
   echo
-  echo "Détail : journalctl -u $unite -e   (sur $(hostname))"
-} | {{ admin_notifier }} "$sujet"
+  echo "Détail : journalctl -u $unite -e   (sur $machine)"
+} | {{ admin_notifier }} --html "$html" "$sujet"
