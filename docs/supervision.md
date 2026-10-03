@@ -48,6 +48,7 @@ Matrice des flux ajoutés :
 | `rasb` (et les postes wg0 qu'il relaie) | `sup` | 443/tcp (HTTPS) | Grafana |
 | `rasb` | `sup` | 9093/tcp (HTTPS, GET seul) | contrôle de veille |
 | `rasb` | `sup` | 22/tcp | administration (Ansible, rebond SSH) |
+| `sup` (Grafana), via `fw` sans NAT | `idp` (10.10.0.5) | 443/tcp (HTTPS) | connexion par Keycloak : échange du code contre un jeton |
 | `sup` | `smtp.gmail.com` | 587/tcp (STARTTLS) | e-mails d'alerte |
 | `sup` | Internet | 443/tcp | paquets, images Docker |
 
@@ -59,7 +60,9 @@ Côté sécurité :
 - nginx n'expose que le chemin utile sur chaque port (écriture des métriques, écriture des
   journaux, lecture des alertes) : les API de requête et d'administration restent internes.
 - Sur `fw`, la seule exception à « les VM ne joignent jamais le réseau local » : `sup`, ports 9090
-  et 3100 (`fw_supervision_ip`).
+  et 3100 (`fw_supervision_ip`). Et la seule entrée du réseau local vers une VM : `sup` vers `idp`,
+  port 443, pour la connexion par Keycloak (`fw_supervision_vers_idp`). `sup` joint `idp` par une
+  route vers `fw` (`route-idp.service`).
 - Certificat `sup.smb111.lan` émis par la PKI du SI ([pki.md](pki.md)) ; les agents vérifient la
   chaîne avec la racine installée partout par le rôle `pki`.
 
@@ -103,8 +106,18 @@ sudo systemctl start veille-supervision.service && journalctl -u veille-supervis
 ## Tableau de bord
 
 Grafana : **https://sup.smb111.lan** depuis un poste de wg0 (la racine de la PKI installée,
-[pki.md](pki.md#télécharger-lautorité-de-certification)). Compte `admin`, mot de passe
-`vault_grafana_admin_mdp`.
+[pki.md](pki.md#télécharger-lautorité-de-certification)), bouton **Sign in with Keycloak** :
+le compte du SSO, avec sa double authentification.
+
+| Groupe Keycloak | Rôle dans Grafana |
+|---|---|
+| `admins` | Admin : tout voir et tout modifier |
+| `utilisateurs` | Viewer : consulter les tableaux de bord |
+| aucun des deux | connexion refusée |
+
+Le rôle est relu à chaque connexion : changer le groupe d'un compte dans Keycloak suffit.
+Le compte local `admin` (mot de passe `vault_grafana_admin_mdp`) reste utilisable en secours, si
+Keycloak est arrêté.
 
 Le tableau **SMB111 · Vue d'ensemble** (dossier SMB111, versionné dans
 `roles/supervision/files/tableaux/`) montre ce que demande FCT 02 :
@@ -137,6 +150,14 @@ depuis ton PC : `ssh -J rasb sup`.
   # ajouter : vault_grafana_admin_mdp: "<mot de passe>"
   ```
 
+- **Secret du client OIDC de Grafana**, dans le vault (sans lui, Grafana garde le seul compte local) :
+
+  ```bash
+  openssl rand -hex 32          # copier la valeur
+  ansible-vault edit group_vars/all/vault.yml
+  # ajouter : vault_grafana_oidc_secret: "<valeur>"
+  ```
+
 - **Collection** `community.docker` : `ansible-galaxy collection install -r requirements.yml`.
 - `pve` et `pve2` allumés, en cluster, avec le stockage `local-lvm` sur les deux.
 
@@ -152,7 +173,8 @@ ansible-playbook playbooks/provision.yml -e cible=sup
 ### 3. Configurer
 
 ```bash
-ansible-playbook site.yml --limit fw --tags fw              # DNS sup.smb111.lan, ouverture vers sup
+ansible-playbook site.yml --limit fw --tags fw              # DNS sup.smb111.lan, ouvertures vers sup et vers idp
+ansible-playbook site.yml --limit idp --tags comptes        # client OIDC « grafana » dans Keycloak
 ansible-playbook site.yml --limit sup                       # durcissement, pare-feu, Docker, pile de supervision
 ansible-playbook site.yml --tags alloy                      # agent sur toutes les machines
 ansible-playbook site.yml --limit rasb                      # contrôle de veille
@@ -190,7 +212,6 @@ et la configuration est entièrement dans le dépôt.
 - **Pas d'authentification sur la réception** des métriques et des journaux : seules les adresses
   du SI y ont accès (pare-feu de `sup`), en HTTPS. Un poste du réseau local qui usurperait l'une
   d'elles pourrait envoyer de fausses métriques.
-- **Grafana en compte local** : la connexion par Keycloak (OIDC, rôles user et admin) est une
-  évolution prévue.
+- **Keycloak arrêté** : plus de connexion par le SSO, seul le compte local `admin` fonctionne.
 - **Kubernetes** : les collecteurs du cluster (kube-state-metrics, Alloy en DaemonSet) seront
   déployés avec k3s ; les règles et le tableau de bord sont prêts.

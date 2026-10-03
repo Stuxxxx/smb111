@@ -31,6 +31,16 @@ kc_groupes:
   - utilisateurs
 kc_groupe_admin: admins
 
+# Clients OIDC des services branchés sur le SSO. Chacun reçoit l'attribut
+# « groups » (groupes du compte) dans ses jetons, pour en déduire les rôles.
+# Un client sans secret (vault absent) n'est pas créé.
+kc_clients:
+  - client_id: "{{ supervision_oidc_client }}"
+    nom: Grafana (supervision)
+    url: "https://{{ supervision_nom }}"
+    redirection: /login/generic_oauth
+    secret: "{{ supervision_oidc_secret }}"
+
 # Sécurité du realm
 kc_politique_mdp: "length(12) and notUsername"
 kc_echecs_avant_blocage: 5
