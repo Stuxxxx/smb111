@@ -1,11 +1,16 @@
-# Démarrer l'hyperviseur à distance (Wake-on-LAN)
+# Démarrer les hyperviseurs à distance (Wake-on-LAN)
 
-L'hyperviseur `pve` peut être allumé depuis n'importe où : le PC passe par `wg0` jusqu'à `rasb`,
-qui envoie un « paquet magique » sur le réseau local. La carte `eno1` de `pve`, restée alimentée,
-rallume le serveur. Les VM démarrent ensuite seules (option `onboot`).
+Les hyperviseurs `pve` et `pve2` (le portable, voir [cluster-proxmox.md](cluster-proxmox.md))
+peuvent être allumés depuis n'importe où : le PC passe par `wg0` jusqu'à `rasb`, qui envoie un
+« paquet magique » sur le réseau local. La carte de chaque nœud, restée alimentée, le rallume :
+`eno1` pour `pve` (depuis l'arrêt complet), l'adaptateur USB `nic0` pour `pve2` (depuis la veille
+seulement). Les VM démarrent ensuite seules (option `onboot`).
+
+Les deux nœuds sont toujours réveillés ensemble : un nœud seul n'a pas le quorum du cluster et ne
+démarre pas ses VM.
 
 ```
-PC --wg0--> rasb --paquet magique (192.168.1.255)--> eno1 de pve --> démarrage --> VM
+PC --wg0--> rasb --paquet magique (192.168.1.255)--> eno1 de pve, nic0 de pve2 --> démarrage --> VM
 ```
 
 ## Utilisation
@@ -16,22 +21,25 @@ Tunnel `wg0` actif :
 ssh rasb reveil-pve
 ```
 
-La commande envoie le paquet, puis attend que `pve` réponde en SSH (5 minutes au plus). Si `pve`
-est déjà allumé, elle le dit et ne fait rien.
+La commande envoie un paquet à chaque nœud éteint, puis attend qu'ils répondent en SSH (5 minutes
+au plus). Un nœud déjà allumé est laissé tel quel.
 
-Éteindre : `ssh pve sudo poweroff`, ou le bouton *Arrêter* de l'interface web.
+Éteindre : `ssh pve sudo poweroff` et `ssh pve2 sudo systemctl suspend` (jamais `poweroff` pour
+`pve2`, son Wake-on-LAN ne marche pas depuis l'arrêt complet).
 
 ## Les tâches de nuit avec pve éteint
 
-`pve` peut rester éteint la nuit : la sauvegarde (02:00), la maintenance du dimanche (03:00) et
-le contrôle (06:00) le réveillent eux-mêmes. Chaque tâche passe par `smb111-avec-pve` sur `rasb` :
+`pve` et `pve2` peuvent rester éteints la nuit : la sauvegarde (02:00), la maintenance du dimanche
+(03:00) et le contrôle (06:00) les réveillent eux-mêmes. Chaque tâche passe par `smb111-avec-pve`
+sur `rasb` :
 
-1. si `pve` est éteint, `reveil-pve` le rallume, puis la tâche attend que toutes les machines
+1. si un nœud est éteint, `reveil-pve` rallume les nœuds éteints, puis la tâche attend que toutes les machines
    répondent (10 minutes au plus, `admin_reveil_attente`), puis que leur heure soit synchronisée
    (5 minutes au plus, `admin_reveil_attente_ntp`), sans quoi `check.yml` signalerait l'horloge ;
 2. la tâche s'exécute normalement ;
-3. si `pve` était éteint au départ, il est rééteint (`systemctl poweroff`). S'il était allumé, il
-   le reste.
+3. les nœuds éteints au départ sont rééteints selon `wol_extinction` (`host_vars`) : `pve` est
+   arrêté (`poweroff`), puis, une fois qu'il ne répond plus, `pve2` est mis en veille (`suspend`).
+   Un nœud allumé au départ le reste.
 
 Les tâches passent une par une (verrou commun) : celle qui attend part une fois `pve` rééteint,
 et le réveille à son tour. Le dimanche, `pve` démarre donc trois fois. Un redémarrage demandé
@@ -48,17 +56,20 @@ de chaque machine : il suffit qu'elle soit allumée de temps en temps.
 
 | Où | Quoi |
 |---|---|
-| `pve` | service `wol-eno1` : `ethtool -s eno1 wol g` à chaque démarrage (le pilote peut remettre le réglage à `d`) |
+| `pve`, `pve2` | service `wol-<carte>` : `ethtool -s <carte> wol g` à chaque démarrage (le pilote peut remettre le réglage à `d`) ; carte `wol_interface`, `eno1` par défaut, `nic0` pour `pve2` |
 | `rasb` | paquet `wakeonlan`, commande `/usr/local/bin/reveil-pve` |
 | `rasb` | commande `/usr/local/bin/smb111-avec-pve` (rôle `admin`), qui encadre les tâches de nuit |
-| `rasb` | MAC de `eno1` relevée pendant que `pve` est allumé, dans `/etc/smb111/pve-wol.mac` |
+| `rasb` | MAC de chaque nœud relevée pendant qu'il est allumé, dans `/etc/smb111/wol/<nœud>.mac` |
 
-Mise en place ou mise à jour : `ansible-playbook site.yml --limit pve --tags wol` (pve allumé).
+Mise en place ou mise à jour : `ansible-playbook site.yml --limit pve,pve2 --tags wol` (nœuds
+allumés), puis `ansible-playbook site.yml --limit rasb` pour `smb111-avec-pve`.
 
 ## Réglages manuels (BIOS, une seule fois, sur place)
 
 - **Wake on LAN** (ou *Power on by PCI-E / LAN*) : activé.
 - **Restore on AC power loss** : *Power On*, pour redémarrer seul après une coupure de courant.
+- `pve2` : toujours branché sur secteur, adaptateur USB toujours branché, couvercle ignoré
+  (voir [cluster-proxmox.md](cluster-proxmox.md)).
 
 ## Limites
 
@@ -69,5 +80,6 @@ distance n'est possible. Le paquet magique ne traverse pas Internet, il part tou
 
 ```bash
 ansible pve -b -a 'ethtool eno1'      # « Wake-on: g »
-cat /etc/smb111/pve-wol.mac           # sur rasb
+ansible pve2 -b -a 'ethtool nic0'     # « Wake-on: g »
+cat /etc/smb111/wol/*.mac             # sur rasb
 ```

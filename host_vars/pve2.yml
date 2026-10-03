@@ -1,0 +1,12 @@
+# Portable Proxmox, second nœud du cluster (docs/cluster-proxmox.md).
+# Il ne porte pas de VM pour l'instant ; il est réveillé et rendormi avec pve.
+pve_node: pve2
+# API de ce nœud, jointe depuis rasb par le réseau local
+pve_api_host: "{{ pve2_ip_lan }}"
+
+hyperviseur_ip_lan: "{{ pve2_ip_lan }}"
+# Adaptateur Ethernet USB : nom stable donné par Proxmox 9 (nic0)
+wol_interface: nic0
+# Son Wake-on-LAN ne marche que depuis la veille : il n'est jamais éteint,
+# seulement mis en veille après une tâche de nuit
+wol_extinction: suspend

@@ -4,7 +4,7 @@ pve_api_host: 10.99.0.100
 pve_api_user: ansible@pve
 pve_api_token_id: smb111
 pve_api_token_secret: "{{ vault_pve_token }}"
-pve_node: pve                 # nom du nœud, tel qu'il apparaît dans l'interface
+pve_node: pve                 # nom du nœud, tel qu'il apparaît dans l'interface (host_vars pour les autres)
 pve_storage: local-lvm
 pve_template: debian-13-template
 
@@ -15,3 +15,17 @@ pve_bridge_externe: vmbr0
 # Mémoire totale allouable aux VM, en Mio. Le serveur dispose d'environ
 # 15,5 Gio : on en laisse près de 3 à l'hyperviseur (pas de sur-allocation).
 pve_memoire_max_vms: 12800
+
+# Nœuds du cluster, sur le réseau local : ils se parlent en SSH (root, par clé)
+# et par l'API (8006), en plus de corosync (docs/cluster-proxmox.md)
+pve_cluster_ips:
+  - "{{ pve_ip_lan }}"
+  - "{{ pve2_ip_lan }}"
+ssh_root_depuis: "{{ pve_cluster_ips }}"
+
+# Ne pas se bannir soi-même : le tunnel wg0 (déjà authentifié par clé), rasb
+# et les autres nœuds du cluster
+fail2ban_ignoreip: "127.0.0.1/8 ::1 10.99.0.0/24 {{ admin_ip_lan }} {{ pve_cluster_ips | join(' ') }}"
+
+# Le compte de service n'est pas dans la liste du dépôt
+check_comptes_autorises: "{{ ['root', 'ansible'] + (admins | rejectattr('state', 'defined') | map(attribute='name') | list) }}"

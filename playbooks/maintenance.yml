@@ -125,6 +125,7 @@
     maintenance_descriptions:
       rasb: Machine d'administration
       pve: Hyperviseur Proxmox
+      pve2: Hyperviseur Proxmox (portable)
       fw: Pare-feu et passerelle
       idp: Fournisseur d'identité (Keycloak)
     maintenance_groupes:
