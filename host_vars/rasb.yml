@@ -15,11 +15,14 @@ admin_sauvegarde_enabled: true
 # pve et pve2 peuvent être éteints la nuit : les tâches les réveillent puis les
 # rééteignent (docs/reveil-pve.md)
 admin_reveil_hyperviseur: true
+# Vérifie toutes les 10 min que la supervision (sup) fonctionne encore
+admin_veille_supervision_enabled: true
 check_timers_attendus: >-
   {{ (['ansible-pull.timer'] if admin_pull_enabled | default(false) else [])
      + (['maintenance.timer'] if admin_maintenance_enabled | default(false) else [])
      + (['check.timer'] if admin_check_enabled | default(false) else [])
      + (['sauvegarde.timer'] if admin_sauvegarde_enabled | default(false) else [])
+     + (['veille-supervision.timer'] if admin_veille_supervision_enabled | default(false) else [])
      + ['apt-daily.timer', 'apt-daily-upgrade.timer'] }}
 # Sauvegardes rapatriées ici, contrôlées par check.yml (moins de 26 h)
 check_sauvegardes:

@@ -1,0 +1,23 @@
+---
+# Agent de supervision Grafana Alloy, sur toutes les machines : métriques du
+# système (exportateur « unix », équivalent de node_exporter) et journal
+# systemd, envoyés à la VM sup (docs/supervision.md).
+alloy_enabled: true
+
+# Nom de la machine dans la supervision (étiquette instance des métriques,
+# host des journaux) : celui de l'inventaire, comme dans les alertes
+alloy_instance: "{{ inventory_hostname }}"
+
+alloy_url_metriques: "https://{{ supervision_nom }}:{{ supervision_port_metriques }}/api/v1/write"
+alloy_url_journaux: "https://{{ supervision_nom }}:{{ supervision_port_journaux }}/loki/api/v1/push"
+# Autorité qui signe le certificat de sup (installée par le rôle pki)
+alloy_ca: /usr/local/share/ca-certificates/smb111-racine.crt
+
+alloy_intervalle: 30s
+# Collecteurs ajoutés à ceux par défaut : systemd permet l'alerte sur les
+# services en échec
+alloy_collecteurs: [systemd]
+
+# Dépôt APT de Grafana
+alloy_depot_url: https://apt.grafana.com
+alloy_depot_cle: https://apt.grafana.com/gpg.key

@@ -1,0 +1,13 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Tableaux de bord versionnés dans le dépôt (roles/supervision/files/tableaux)
+apiVersion: 1
+
+providers:
+  - name: smb111
+    folder: SMB111
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/tableaux

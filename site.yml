@@ -6,6 +6,8 @@
     - common
     - role: pki
       tags: [pki]
+    - role: alloy
+      tags: [alloy, supervision]
 
 - name: Machine d'administration
   hosts: admin
@@ -52,6 +54,14 @@
       tags: [keycloak]
     - role: keycloak_comptes
       tags: [keycloak, comptes]
+
+- name: Supervision (Prometheus, Loki, Alertmanager, Grafana)
+  hosts: supervision
+  become: true
+  roles:
+    - compte_ansible
+    - role: supervision
+      tags: [supervision]
 
 - name: Gestion des administrateurs
   import_playbook: admins.yml

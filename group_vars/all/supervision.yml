@@ -1,0 +1,25 @@
+---
+# Supervision du SI (docs/supervision.md). Partagé par la VM sup (rôle
+# supervision), les agents de toutes les machines (rôle alloy), fw (ouverture
+# vers sup) et rasb (contrôle de veille).
+supervision_hote: sup
+supervision_ip: "{{ vms | selectattr('name', 'equalto', supervision_hote) | map(attribute='ip') | first }}"
+supervision_nom: "{{ supervision_hote }}.{{ domaine_interne }}"
+
+# Ports exposés par sup, tous en HTTPS (certificat de la PKI du SI)
+supervision_port_grafana: 443        # tableaux de bord, pour les admins (par rasb)
+supervision_port_metriques: 9090     # réception des métriques (Prometheus remote write)
+supervision_port_journaux: 3100      # réception des journaux (Loki)
+supervision_port_alertes: 9093       # lecture des alertes, pour le contrôle de veille de rasb
+
+# Machines dont les agents envoient à sup. Les VM internes sortent par la NAT
+# de fw : sup les voit avec l'adresse externe de fw.
+supervision_sources:
+  - "{{ admin_ip_lan }}"
+  - "{{ pve_ip_lan }}"
+  - "{{ pve2_ip_lan }}"
+  - "{{ fw_ip_externe }}"
+
+# Kubernetes : règles et tableaux de bord du cluster, à activer une fois k3s
+# déployé avec ses collecteurs (kube-state-metrics, Alloy)
+supervision_kubernetes: false

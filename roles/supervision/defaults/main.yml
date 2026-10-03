@@ -1,0 +1,61 @@
+---
+# VM de supervision (docs/supervision.md) : Prometheus (métriques et règles
+# d'alerte), Alertmanager (e-mails), Loki (journaux) et Grafana (tableaux de
+# bord), en conteneurs Docker. Seul nginx écoute sur le réseau, en HTTPS ; les
+# autres n'écoutent que sur 127.0.0.1 (réseau de l'hôte, sans NAT Docker, pour
+# que le pare-feu de sup s'applique vraiment).
+
+# Images épinglées (reproductibilité). Mises à jour : changer la version ici.
+supervision_images:
+  prometheus: prom/prometheus:v3.15.0
+  alertmanager: prom/alertmanager:v0.34.1
+  loki: grafana/loki:3.7.8
+  grafana: grafana/grafana:13.2.3
+  nginx: nginx:1.30.5-alpine
+
+supervision_dir: /opt/supervision            # configuration (versionnée ici)
+supervision_donnees: /var/lib/supervision    # données (non sauvegardées : reconstructibles)
+
+# Utilisateurs des images, propriétaires de leurs données
+supervision_uid:
+  prometheus: 65534
+  alertmanager: 65534
+  loki: 10001
+  grafana: 472
+
+# Rétention
+supervision_retention_metriques: 15d
+supervision_retention_journaux: 360h         # 15 jours
+
+# Machines qui doivent envoyer des métriques : l'alerte MachineMuette se
+# déclenche pour chacune après supervision_muette_delai sans données.
+supervision_hotes_attendus: "{{ groups['all'] }}"
+supervision_muette_fenetre: 5m
+supervision_muette_delai: 10m
+
+# Seuils des alertes
+supervision_seuil_cpu: 90                    # % d'utilisation, pendant 10 min
+supervision_seuil_memoire: 90                # % d'utilisation, pendant 10 min
+supervision_seuil_disque: 10                 # % d'espace libre, pendant 15 min
+
+# Alertmanager
+supervision_alertes_repetition: 4h           # rappel d'une alerte toujours en cours
+
+# Destinataires : les admins de Keycloak, relevés sur rasb (group_vars/all/mail.yml),
+# lus sur le nœud de contrôle. Relancer le rôle pour prendre en compte un changement.
+supervision_destinataires: >-
+  {{ (lookup('ansible.builtin.file', notification_destinataires_fichier, errors='ignore') | default('', true))
+     .splitlines() | map('trim') | reject('match', '^(#|$)') | list
+     or [notification_destinataire_secours] }}
+
+# Compte administrateur local de Grafana (mot de passe dans le vault)
+supervision_grafana_admin: admin
+supervision_grafana_admin_mdp: "{{ vault_grafana_admin_mdp | default('') }}"
+
+# Seules adresses autorisées en administration (SSH, Grafana, lecture des
+# alertes) : rasb, qui relaie aussi les postes de wg0
+supervision_admin: ["{{ admin_ip_lan }}"]
+
+# Dépôt APT de Docker
+supervision_docker_depot: https://download.docker.com/linux/debian
+supervision_docker_cle: https://download.docker.com/linux/debian/gpg

@@ -28,6 +28,7 @@ manifests Kubernetes, documentation et schémas.
 | [`docs/pki.md`](docs/pki.md) | PKI interne : création, émission des certificats, confiance sur les postes |
 | [`docs/sauvegarde.md`](docs/sauvegarde.md) | sauvegarde et restauration de Keycloak |
 | [`docs/notifications.md`](docs/notifications.md) | tâches programmées sur `rasb` et notifications des admins par e-mail |
+| [`docs/supervision.md`](docs/supervision.md) | supervision : VM `sup` (Prometheus, Loki, Grafana), alertes par e-mail, mise en place |
 
 ---
 

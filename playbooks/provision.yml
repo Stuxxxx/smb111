@@ -9,7 +9,9 @@
 # Prérequis : template debian-13-template (vmid 9000), jeton d'API dans le vault,
 # tunnel wg0 actif vers l'hyperviseur.
 
-# Le premier nœud du cluster (pve) porte les VM ; pve2 n'en reçoit pas.
+# Les VM sont clonées sur le premier nœud du cluster (pve), qui porte le
+# template. Celles qui vont sur un autre nœud (champ node de vms.yml, ex. sup sur
+# pve2) y sont ensuite migrées, arrêtées : local-lvm n'est pas partagé.
 - name: Créer les VM sur Proxmox
   hosts: proxmox[0]
   gather_facts: false
@@ -21,6 +23,8 @@
     cible: ""
     vms_cibles: >-
       {{ vms | selectattr('name', 'equalto', cible) | list if cible else vms }}
+    # VM branchées sur le réseau local (vmbr0) plutôt que derrière fw
+    vms_locales: "{{ vms_cibles | selectattr('reseau', 'defined') | selectattr('reseau', 'equalto', 'local') | list }}"
 
     # Connexion à l'API. proxmox_nic refuse le paramètre node : il utilise
     # pve_api seul ; les autres modules utilisent pve (pve_api + node).
@@ -36,13 +40,18 @@
       node: "{{ pve_node }}"
 
   tasks:
-    - name: Vérifier que la mémoire des VM tient dans le serveur
+    - name: Vérifier que la mémoire des VM tient dans chaque nœud
       ansible.builtin.assert:
-        that: vms | map(attribute='memory') | sum <= pve_memoire_max_vms
+        that: memoire_noeud | int <= hostvars[item].pve_memoire_max_vms | int
         fail_msg: >-
-          Les VM demandent {{ vms | map(attribute='memory') | sum }} Mio,
-          plus que pve_memoire_max_vms ({{ pve_memoire_max_vms }} Mio).
+          Les VM de {{ item }} demandent {{ memoire_noeud }} Mio, plus que son
+          pve_memoire_max_vms ({{ hostvars[item].pve_memoire_max_vms }} Mio).
         quiet: true
+      vars:
+        memoire_noeud: >-
+          {{ vms | selectattr('node', 'defined') | selectattr('node', 'equalto', item) | map(attribute='memory') | sum
+             + (vms | rejectattr('node', 'defined') | map(attribute='memory') | sum if item == pve_node else 0) }}
+      loop: "{{ groups['proxmox'] }}"
 
     - name: Vérifier que le template existe
       community.proxmox.proxmox_vm_info:
@@ -64,9 +73,34 @@
       loop_control:
         label: "{{ item.name }} ({{ item.vmid }})"
 
+    - name: Nœud actuel des VM
+      community.proxmox.proxmox_vm_info:
+        <<: *pve_api
+        vmid: "{{ item.vmid }}"
+      register: vm_info
+      loop: "{{ vms_cibles | selectattr('node', 'defined') | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    # Migration hors ligne : le disque est recopié vers le local-lvm du nœud cible
+    - name: Migrer les VM vers leur nœud
+      ansible.builtin.command: "qm migrate {{ item.item.vmid }} {{ item.item.node }}"
+      delegate_to: "{{ item.proxmox_vms[0].node }}"
+      connection: ssh
+      become: true
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
+      when:
+        - item.proxmox_vms | length > 0      # absente en --check avant le clonage
+        - item.proxmox_vms[0].node != item.item.node
+      loop: "{{ vm_info.results }}"
+      loop_control:
+        label: "{{ item.item.name }} → {{ item.item.node }}"
+
     - name: Dimensionner CPU et mémoire
       community.proxmox.proxmox_kvm:
-        <<: *pve
+        <<: *pve_api
+        node: "{{ item.node | default(pve_node) }}"
         vmid: "{{ item.vmid }}"
         cores: "{{ item.cores }}"
         memory: "{{ item.memory }}"
@@ -78,7 +112,7 @@
 
     - name: Taille actuelle du disque
       ansible.builtin.command: "qm config {{ item.vmid }}"
-      delegate_to: pve
+      delegate_to: "{{ item.node | default(pve_node) }}"
       connection: ssh
       become: true
       vars:
@@ -91,7 +125,7 @@
 
     - name: Agrandir le disque si nécessaire
       ansible.builtin.command: "qm resize {{ item.item.vmid }} scsi0 {{ item.item.disk }}G"
-      delegate_to: pve
+      delegate_to: "{{ item.item.node | default(pve_node) }}"
       connection: ssh
       become: true
       vars:
@@ -112,17 +146,32 @@
       loop_control:
         label: "{{ item.name }} → {{ pve_bridge_externe }}"
 
+    - name: Interface unique sur le réseau local
+      community.proxmox.proxmox_nic:
+        <<: *pve_api
+        vmid: "{{ item.vmid }}"
+        interface: net0
+        bridge: "{{ pve_bridge_externe }}"
+        state: present
+      loop: "{{ vms_locales }}"
+      loop_control:
+        label: "{{ item.name }} → {{ pve_bridge_externe }}"
+
     - name: Injecter la configuration cloud-init
       community.proxmox.proxmox_kvm:
-        <<: *pve
+        <<: *pve_api
+        node: "{{ item.node | default(pve_node) }}"
         vmid: "{{ item.vmid }}"
         # Pas de cipassword : le compte ansible n'a pas de mot de passe
         # (cloud-init le verrouille), l'accès se fait uniquement par clé.
         ciuser: ansible
         sshkeys: "{{ lookup('ansible.builtin.file', '/etc/ansible/smb111.pub') }}"
-        nameservers: "{{ '1.1.1.1' if item.name == 'fw' else passerelle_interne }}"
+        # fw et les VM du réseau local ne dépendent pas du DNS de fw
+        nameservers: "{{ '1.1.1.1' if item.name == 'fw' or item in vms_locales else passerelle_interne }}"
         ipconfig:
-          ipconfig0: "ip={{ item.ip }}/24{{ ',gw=' ~ passerelle_interne if item.name != 'fw' else '' }}"
+          ipconfig0: >-
+            ip={{ item.ip }}/24{{ ',gw=' ~ passerelle_externe if item in vms_locales
+                                  else ',gw=' ~ passerelle_interne if item.name != 'fw' else '' }}
           ipconfig1: "{{ 'ip=' ~ fw_ip_externe ~ '/24,gw=' ~ passerelle_externe if item.name == 'fw' else '' }}"
         update: true
       loop: "{{ vms_cibles }}"
@@ -131,7 +180,8 @@
 
     - name: Démarrer les VM
       community.proxmox.proxmox_kvm:
-        <<: *pve
+        <<: *pve_api
+        node: "{{ item.node | default(pve_node) }}"
         vmid: "{{ item.vmid }}"
         state: started
       loop: "{{ vms_cibles }}"

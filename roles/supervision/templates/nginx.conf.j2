@@ -1,0 +1,82 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Seul point d'entrée réseau de sup, en HTTPS. Chaque port n'expose que le
+# chemin utile : les API de lecture et d'administration restent sur 127.0.0.1.
+worker_processes auto;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  access_log off;
+  server_tokens off;
+  client_max_body_size 20m;
+
+  ssl_certificate     /etc/ssl/smb111/{{ supervision_hote }}-chaine.crt;
+  ssl_certificate_key /etc/ssl/smb111/{{ supervision_hote }}.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:SSL:10m;
+
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+
+  map $http_upgrade $connexion {
+    default upgrade;
+    ''      close;
+  }
+
+  # Grafana, pour les admins
+  server {
+    listen {{ supervision_ip }}:{{ supervision_port_grafana }} ssl;
+    http2 on;
+    server_name {{ supervision_nom }};
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location / {
+      proxy_pass http://127.0.0.1:3000;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connexion;
+    }
+  }
+
+  # Réception des métriques des agents
+  server {
+    listen {{ supervision_ip }}:{{ supervision_port_metriques }} ssl;
+    server_name {{ supervision_nom }};
+
+    location = /api/v1/write {
+      limit_except POST { deny all; }
+      proxy_pass http://127.0.0.1:9090;
+    }
+    location / { return 404; }
+  }
+
+  # Réception des journaux des agents
+  server {
+    listen {{ supervision_ip }}:{{ supervision_port_journaux }} ssl;
+    server_name {{ supervision_nom }};
+
+    location = /loki/api/v1/push {
+      limit_except POST { deny all; }
+      proxy_pass http://127.0.0.1:3100;
+    }
+    location / { return 404; }
+  }
+
+  # Lecture seule des alertes en cours, pour le contrôle de veille de rasb
+  server {
+    listen {{ supervision_ip }}:{{ supervision_port_alertes }} ssl;
+    server_name {{ supervision_nom }};
+
+    location = /api/v2/alerts {
+      limit_except GET { deny all; }
+      proxy_pass http://127.0.0.1:9093;
+    }
+    location / { return 404; }
+  }
+}

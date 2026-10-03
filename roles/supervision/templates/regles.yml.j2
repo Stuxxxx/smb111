@@ -1,0 +1,126 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Règles d'alerte du SI (FCT 04 : au moins 3 alertes avec seuil et notification).
+# Chaque alerte part par e-mail aux admins (Alertmanager), résolution comprise.
+groups:
+  - name: supervision
+    rules:
+      # Toujours active : si elle n'arrive plus, la supervision elle-même est
+      # en panne. rasb la vérifie (contrôle de veille) et prévient les admins.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          resume: Alerte permanente qui prouve que la chaîne d'alerte fonctionne.
+
+      - alert: ComposantSupervisionEnPanne
+        expr: up{job=~"prometheus|alertmanager|loki|grafana"} == 0
+        for: 5m
+        labels:
+          severity: critique
+        annotations:
+{% raw %}
+          resume: "{{ $labels.job }} ne répond plus sur sup depuis 5 minutes."
+{% endraw %}
+
+  - name: machines
+    rules:
+      # Aucune métrique reçue d'une machine attendue : arrêtée, agent stoppé ou
+      # réseau coupé (seuil : {{ supervision_muette_fenetre }} sans données, pendant {{ supervision_muette_delai }})
+      - alert: MachineMuette
+        expr: >-
+{% for h in supervision_hotes_attendus %}
+          absent_over_time(node_uname_info{instance="{{ h }}"}[{{ supervision_muette_fenetre }}]){{ ' or' if not loop.last }}
+{% endfor %}
+        for: {{ supervision_muette_delai }}
+        labels:
+          severity: critique
+        annotations:
+{% raw %}
+          resume: "{{ $labels.instance }} n'envoie plus de métriques : machine arrêtée, agent Alloy stoppé ou réseau coupé."
+{% endraw %}
+
+      - alert: CPUSature
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) > {{ supervision_seuil_cpu }}
+        for: 10m
+        labels:
+          severity: avertissement
+        annotations:
+{% raw %}
+          resume: "Processeur de {{ $labels.instance }} utilisé à {{ $value | printf \"%.0f\" }} % depuis 10 minutes (seuil : {% endraw %}{{ supervision_seuil_cpu }}{% raw %} %)."
+{% endraw %}
+
+      - alert: MemoireSaturee
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > {{ supervision_seuil_memoire }}
+        for: 10m
+        labels:
+          severity: avertissement
+        annotations:
+{% raw %}
+          resume: "Mémoire de {{ $labels.instance }} utilisée à {{ $value | printf \"%.0f\" }} % depuis 10 minutes (seuil : {% endraw %}{{ supervision_seuil_memoire }}{% raw %} %)."
+{% endraw %}
+
+      - alert: DisqueBientotPlein
+        expr: >-
+          100 * node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|overlay|squashfs|efivarfs"}
+            / node_filesystem_size_bytes{fstype!~"tmpfs|ramfs|overlay|squashfs|efivarfs"} < {{ supervision_seuil_disque }}
+        for: 15m
+        labels:
+          severity: avertissement
+        annotations:
+{% raw %}
+          resume: "{{ $labels.mountpoint }} sur {{ $labels.instance }} n'a plus que {{ $value | printf \"%.0f\" }} % d'espace libre (seuil : {% endraw %}{{ supervision_seuil_disque }}{% raw %} %)."
+{% endraw %}
+
+      - alert: ServiceEnEchec
+        expr: node_systemd_unit_state{state="failed"} == 1
+        for: 2m
+        labels:
+          severity: avertissement
+        annotations:
+{% raw %}
+          resume: "Le service {{ $labels.name }} est en échec sur {{ $labels.instance }}."
+{% endraw %}
+{% if supervision_kubernetes %}
+
+  # Métriques du cluster, envoyées par ses collecteurs (kube-state-metrics, Alloy)
+  - name: kubernetes
+    rules:
+      - alert: KubeNoeudNonPret
+        expr: kube_node_status_condition{condition="Ready", status="true"} == 0
+        for: 2m
+        labels:
+          severity: critique
+        annotations:
+{% raw %}
+          resume: "Le nœud Kubernetes {{ $labels.node }} n'est plus Ready depuis 2 minutes."
+{% endraw %}
+
+      - alert: KubeDeploiementIncomplet
+        expr: kube_deployment_status_replicas_available < kube_deployment_spec_replicas
+        for: 2m
+        labels:
+          severity: critique
+        annotations:
+{% raw %}
+          resume: "{{ $labels.namespace }}/{{ $labels.deployment }} : {{ $value }} réplica(s) disponible(s), moins que demandé."
+{% endraw %}
+
+      - alert: KubePodNonDemarre
+        expr: sum by (namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"}) > 0
+        for: 5m
+        labels:
+          severity: avertissement
+        annotations:
+{% raw %}
+          resume: "Le pod {{ $labels.namespace }}/{{ $labels.pod }} ne tourne pas depuis 5 minutes."
+{% endraw %}
+
+      - alert: KubeAPIMuette
+        expr: absent_over_time(kube_node_info[5m])
+        for: 5m
+        labels:
+          severity: critique
+        annotations:
+          resume: "Plus aucune métrique du cluster : API Kubernetes ou collecteurs injoignables."
+{% endif %}
