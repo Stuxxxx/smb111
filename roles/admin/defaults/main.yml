@@ -33,11 +33,10 @@ admin_sauvegarde_schedule: "*-*-* 02:00:00"
 # Les clones personnels (~/smb111) restent libres d'être sur une autre branche.
 admin_depot_auto: /var/lib/smb111/depot
 
-# Tâches programmées avec l'hyperviseur éteint la nuit : chaque tâche le
-# réveille (commande du rôle wol), attend les VM, puis le rééteint s'il
-# était éteint au départ. Activé machine par machine, dans host_vars/.
+# Tâches programmées avec les hyperviseurs éteints la nuit : chaque tâche les
+# réveille (commande du rôle wol), attend les VM, puis rééteint ceux qui
+# étaient éteints au départ. Activé machine par machine, dans host_vars/.
 admin_reveil_hyperviseur: false
-admin_reveil_hote: "{{ groups['proxmox'] | first }}"
 admin_reveil_commande: /usr/local/bin/reveil-pve
 admin_reveil_attente: 600       # secondes laissées aux VM pour répondre
 admin_reveil_attente_ntp: 300   # secondes laissées pour synchroniser l'heure

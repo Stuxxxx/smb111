@@ -12,8 +12,8 @@ admin_maintenance_enabled: true
 admin_check_enabled: true
 # Sauvegarde nocturne (02:00), avant la maintenance du dimanche (03:00)
 admin_sauvegarde_enabled: true
-# pve peut être éteint la nuit : les tâches le réveillent puis le rééteignent
-# (docs/reveil-pve.md)
+# pve et pve2 peuvent être éteints la nuit : les tâches les réveillent puis les
+# rééteignent (docs/reveil-pve.md)
 admin_reveil_hyperviseur: true
 check_timers_attendus: >-
   {{ (['ansible-pull.timer'] if admin_pull_enabled | default(false) else [])
@@ -31,9 +31,10 @@ wg_private_key: "{{ vault_wg_rasb_private }}"
 wg_route_lan: true
 wg_lan_iface: eth0
 # Les pairs sortent sur le réseau local avec l'adresse de rasb : sans cette
-# liste, ils joindraient pve et fw en direct, comme s'ils étaient rasb.
+# liste, ils joindraient pve, pve2 et fw en direct, comme s'ils étaient rasb.
 wg_lan_interdits:
   - "{{ pve_ip_lan }}"
+  - "{{ pve2_ip_lan }}"
   - "{{ fw_ip_externe }}"
 wg_peers: "{{ wg_peers_declares }}"
 wg_services_lien: "{{ services_web_admin }}"
