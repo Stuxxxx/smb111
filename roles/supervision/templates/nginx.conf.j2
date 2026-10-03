@@ -20,15 +20,21 @@ http {
   ssl_prefer_server_ciphers off;
   ssl_session_cache shared:SSL:10m;
 
-  proxy_http_version 1.1;
-  proxy_set_header Host $host;
-  proxy_set_header X-Forwarded-For $remote_addr;
-  proxy_set_header X-Forwarded-Proto https;
-
   map $http_upgrade $connexion {
     default upgrade;
     ''      close;
   }
+
+  # En-têtes transmis aux services. Tous ici : un proxy_set_header dans un
+  # bloc location annulerait l'héritage des autres (Grafana recevrait alors
+  # Host: 127.0.0.1:3000 et refuserait les requêtes, « origin not allowed »).
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+  # WebSocket de Grafana Live (/api/live/ws)
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection $connexion;
 
   # Grafana, pour les admins
   server {
@@ -39,8 +45,6 @@ http {
 
     location / {
       proxy_pass http://127.0.0.1:3000;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection $connexion;
     }
   }
 
