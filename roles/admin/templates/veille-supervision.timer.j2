@@ -1,0 +1,10 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[Unit]
+Description=Contrôle de veille de la supervision, toutes les {{ admin_veille_intervalle }}
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ admin_veille_intervalle }}
+
+[Install]
+WantedBy=timers.target

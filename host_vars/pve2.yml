@@ -1,5 +1,5 @@
 # Portable Proxmox, second nœud du cluster (docs/cluster-proxmox.md).
-# Il ne porte pas de VM pour l'instant ; il est réveillé et rendormi avec pve.
+# Il porte la VM de supervision (sup) ; il est réveillé et rendormi avec pve.
 pve_node: pve2
 # API de ce nœud, jointe depuis rasb par le réseau local
 pve_api_host: "{{ pve2_ip_lan }}"
@@ -10,3 +10,7 @@ wol_interface: nic0
 # Son Wake-on-LAN ne marche que depuis la veille : il n'est jamais éteint,
 # seulement mis en veille après une tâche de nuit
 wol_extinction: suspend
+
+# Mémoire allouable aux VM, en Mio : le portable a 8 Gio, on en laisse près de
+# 2 à Proxmox (pas de sur-allocation). Il porte la VM de supervision.
+pve_memoire_max_vms: 6144

@@ -1,0 +1,60 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Envoi direct par le service d'envoi (comme rasb), sans passer par fw :
+# les alertes partent même si fw est en panne.
+global:
+  smtp_smarthost: "{{ mail_service_hote }}:{{ mail_service_port }}"
+  smtp_from: "{{ mail_expediteur_nom }} (supervision) <{{ mail_expediteur }}>"
+  smtp_auth_username: "{{ mail_service_utilisateur }}"
+  smtp_auth_password: {{ mail_service_mdp | to_json }}
+  smtp_require_tls: true
+  resolve_timeout: 5m
+
+route:
+  receiver: admins
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: {{ supervision_alertes_repetition }}
+  routes:
+    # Alerte permanente : sa disparition est surveillée par rasb (contrôle de veille)
+    - matchers: ['alertname = "Watchdog"']
+      receiver: aucun
+      repeat_interval: 24h
+
+# Une machine muette déclenche aussi ses autres alertes : seule la première est envoyée
+inhibit_rules:
+  - source_matchers: ['alertname = "MachineMuette"']
+    target_matchers: ['alertname != "MachineMuette"']
+    equal: [instance]
+
+receivers:
+  - name: aucun
+  - name: admins
+    email_configs:
+      - to: {{ supervision_destinataires | join(', ') | to_json }}
+        send_resolved: true
+        headers:
+          Subject: {% raw %}'[SMB111] {{ if eq .Status "firing" }}Alerte{{ else }}Résolu{{ end }} : {{ .CommonLabels.alertname }}{{ with .CommonLabels.instance }} sur {{ . }}{{ end }}'{% endraw %}
+
+        html: |
+{% raw %}
+          <div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;max-width:640px;">
+          <h2 style="margin:0 0 12px;">{{ if eq .Status "firing" }}{{ .Alerts.Firing | len }} alerte(s) en cours{{ else }}Alerte résolue{{ end }}</h2>
+          {{ range .Alerts }}
+          <div style="border-left:4px solid {{ if eq .Status "firing" }}#ef4444{{ else }}#22c55e{{ end }};background:#f8fafc;padding:10px 14px;margin:0 0 10px;">
+            <b>{{ if eq .Status "firing" }}En cours{{ else }}Résolue{{ end }} · {{ .Labels.alertname }}</b>{{ with .Labels.instance }} sur {{ . }}{{ end }}<br>
+            {{ .Annotations.resume }}<br>
+            <small style="color:#64748b;">Depuis le {{ .StartsAt.Format "02/01/2006 à 15:04" }} (UTC){{ if eq .Status "resolved" }}, résolue le {{ .EndsAt.Format "02/01/2006 à 15:04" }}{{ end }}</small>
+          </div>
+          {{ end }}
+          <p style="font-size:12px;color:#94a3b8;">Envoyé par Alertmanager depuis sup · tableaux de bord : https://{% endraw %}{{ supervision_nom }}{% raw %}/</p>
+          </div>
+{% endraw %}
+        text: |
+{% raw %}
+          {{ range .Alerts }}{{ if eq .Status "firing" }}EN COURS{{ else }}RÉSOLUE{{ end }} · {{ .Labels.alertname }}{{ with .Labels.instance }} sur {{ . }}{{ end }}
+          {{ .Annotations.resume }}
+          Depuis le {{ .StartsAt.Format "02/01/2006 à 15:04" }} (UTC)
+
+          {{ end }}
+{% endraw %}

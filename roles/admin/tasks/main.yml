@@ -178,6 +178,32 @@
     enabled: "{{ admin_check_enabled }}"
     daemon_reload: true
 
+- name: Commande du contrôle de veille de la supervision
+  ansible.builtin.template:
+    src: smb111-veille-supervision.j2
+    dest: "{{ admin_veille_commande }}"
+    owner: root
+    group: admins
+    mode: "0750"
+  when: admin_veille_supervision_enabled | bool
+
+- name: Service et timer du contrôle de veille de la supervision
+  ansible.builtin.template:
+    src: "veille-supervision.{{ item }}.j2"
+    dest: "/etc/systemd/system/veille-supervision.{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [service, timer]
+
+- name: Activer ou désactiver le contrôle de veille de la supervision
+  ansible.builtin.systemd_service:
+    name: veille-supervision.timer
+    state: "{{ 'started' if admin_veille_supervision_enabled else 'stopped' }}"
+    enabled: "{{ admin_veille_supervision_enabled }}"
+    daemon_reload: true
+  when: not ansible_check_mode
+
 # Clé des machines, partagée par les administrateurs comme le mot de passe du
 # vault (qui la contient déjà) : chacun lance les playbooks sous son propre
 # compte. Appartenant à root, ssh l'accepte malgré la lecture par le groupe.

@@ -66,6 +66,11 @@ table inet filtre {
     iifname $IF_LIEN oifname $IF_INT ip saddr $POSTES ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
 {% endfor %}
 
+{% if fw_supervision_ip %}
+    # Supervision : les agents des VM envoient à sup, sur le réseau local
+    iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT ip daddr {{ fw_supervision_ip }} tcp dport { {{ fw_supervision_ports | join(', ') }} } accept comment "supervision"
+
+{% endif %}
     # Les VM sortent vers Internet, jamais vers le réseau local
     iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT ip daddr $INTERDITS drop
     iifname $IF_INT oifname $IF_EXT ip saddr $RESEAU_INT accept

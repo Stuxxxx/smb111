@@ -1,0 +1,11 @@
+# Géré par Ansible — toute modification manuelle sera écrasée
+[Unit]
+Description=Contrôle de veille de la supervision (alerte Watchdog de sup)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ admin_pull_user }}
+StateDirectory=smb111-veille
+ExecStart={{ admin_veille_commande }}

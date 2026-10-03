@@ -1,7 +1,12 @@
 ---
 # Les VM à créer. L'ordre compte : fw en premier, il porte la passerelle.
 # Partagé : provision.yml crée les VM, le rôle fw en déduit les enregistrements DNS.
-# Total : 12 800 Mio, sous pve_memoire_max_vms (vérifié par provision.yml).
+#
+# node    nœud Proxmox qui porte la VM (défaut : pve)
+# reseau  interne (défaut : vmbr1, derrière fw) ou local (vmbr0, réseau de la box)
+#
+# Mémoire par nœud, sous son pve_memoire_max_vms (vérifié par provision.yml) :
+# pve 12 800 Mio, pve2 4 096 Mio.
 vms:
   - { name: fw,   vmid: 110, ip: 10.10.0.1,  cores: 1, memory: 1024, disk: 10, externe: true }
   - { name: idp,  vmid: 120, ip: 10.10.0.5,  cores: 2, memory: 1536, disk: 20 }
@@ -10,3 +15,6 @@ vms:
   - { name: cp3,  vmid: 133, ip: 10.10.0.13, cores: 2, memory: 2048, disk: 20 }
   - { name: w1,   vmid: 141, ip: 10.10.0.21, cores: 4, memory: 2048, disk: 40 }
   - { name: w2,   vmid: 142, ip: 10.10.0.22, cores: 4, memory: 2048, disk: 40 }
+  # Supervision (docs/supervision.md) : sur pve2, hors du réseau interne, pour
+  # survivre à une panne de pve ou de fw et prévenir les admins quand même
+  - { name: sup,  vmid: 150, ip: 192.168.1.71, cores: 2, memory: 4096, disk: 40, node: pve2, reseau: local }
