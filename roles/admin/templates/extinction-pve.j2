@@ -1,0 +1,53 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Éteint les hyperviseurs, pendant de reveil-pve : arrêt complet ou veille,
+# selon wol_extinction (host_vars). Les arrêts d'abord : un nœud qui arrête
+# ses VM garde ainsi le quorum ; les mises en veille une fois ceux-ci éteints.
+#
+#   extinction-pve              tous les hyperviseurs
+#   extinction-pve pve2         seulement ceux nommés
+set -uo pipefail
+
+# Ansible lit ansible.cfg et l'inventaire de la copie automatique du dépôt
+cd "{{ admin_depot_auto }}" || exit 1
+
+# nom adresse extinction, un hyperviseur par ligne
+hyperviseurs=(
+{% for h in groups['proxmox'] %}
+  "{{ h }} {{ hostvars[h].hyperviseur_ip_lan }} {{ hostvars[h].wol_extinction | default('poweroff') }}"
+{% endfor %}
+)
+repond() { timeout 2 bash -c ": > /dev/tcp/$1/22" 2>/dev/null; }
+
+# Lancée en arrière-plan sur le nœud : la connexion se coupe pendant l'arrêt
+eteindre() {
+  ansible "$1" -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl $2" >/dev/null \
+    || { echo "Extinction de $1 ($2) impossible : il reste allumé." >&2; return 1; }
+}
+
+cibles=()
+for ligne in "${hyperviseurs[@]}"; do
+  read -r nom ip _ <<<"$ligne"
+  if [ "$#" -gt 0 ] && [[ " $* " != *" $nom "* ]]; then continue; fi
+  if repond "$ip"; then cibles+=("$ligne"); else echo "$nom est déjà éteint ou en veille."; fi
+done
+
+rc=0
+arretes=()
+for ligne in "${cibles[@]}"; do
+  read -r nom ip extinction <<<"$ligne"
+  [ "$extinction" = suspend ] && continue
+  echo "Arrêt de $nom ($extinction)."
+  if eteindre "$nom" "$extinction"; then arretes+=("$ip"); else rc=1; fi
+done
+for ip in "${arretes[@]}"; do
+  for _ in $(seq 1 60); do repond "$ip" || break; sleep 3; done
+done
+for ligne in "${cibles[@]}"; do
+  read -r nom ip extinction <<<"$ligne"
+  [ "$extinction" = suspend ] || continue
+  echo "Mise en veille de $nom."
+  eteindre "$nom" suspend || rc=1
+done
+
+exit "$rc"
