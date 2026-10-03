@@ -52,6 +52,14 @@ supervision_destinataires: >-
 supervision_grafana_admin: admin
 supervision_grafana_admin_mdp: "{{ vault_grafana_admin_mdp | default('') }}"
 
+# Connexion par Keycloak (OIDC), active dès que le secret du client est dans
+# le vault. Le compte admin local reste utilisable en secours.
+supervision_oidc: "{{ supervision_oidc_secret | length > 0 }}"
+supervision_oidc_url: "{{ hostvars['idp'].keycloak_hostname | default('https://idp.' ~ domaine_interne) }}/realms/smb111/protocol/openid-connect"
+# Groupes Keycloak → rôles Grafana. Un compte d'aucun de ces groupes est refusé.
+supervision_oidc_groupe_admin: admins           # Admin : tout modifier
+supervision_oidc_groupe_lecture: utilisateurs   # Viewer : consulter
+
 # Seules adresses autorisées en administration (SSH, Grafana, lecture des
 # alertes) : rasb, qui relaie aussi les postes de wg0
 supervision_admin: ["{{ admin_ip_lan }}"]

@@ -22,6 +22,10 @@ fw_services_web_admin: "{{ services_web_admin }}"
 fw_supervision_ip: "{{ supervision_ip | default('') }}"
 fw_supervision_ports: "{{ [supervision_port_metriques, supervision_port_journaux] if supervision_ip is defined else [] }}"
 
+# Grafana (sur sup, réseau local) échange les codes de connexion contre des
+# jetons auprès de Keycloak : seule entrée du réseau local vers une VM.
+fw_supervision_vers_idp: "{{ supervision_idp_ip | default('') if supervision_oidc_secret | default('') | length > 0 else '' }}"
+
 # Destinations interdites aux VM : le réseau local (box, hyperviseur, postes).
 # Seul Internet leur est accessible, via la NAT.
 fw_destinations_interdites: ["192.168.1.0/24"]

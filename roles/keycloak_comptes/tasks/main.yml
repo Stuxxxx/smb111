@@ -96,6 +96,42 @@
         roles:
           - name: realm-admin
 
+    - name: Clients OIDC des services
+      middleware_automation.keycloak.keycloak_client:
+        realm: "{{ kc_realm }}"
+        client_id: "{{ item.client_id }}"
+        name: "{{ item.nom }}"
+        enabled: true
+        protocol: openid-connect
+        public_client: false
+        client_authenticator_type: client-secret
+        secret: "{{ item.secret }}"
+        standard_flow_enabled: true
+        implicit_flow_enabled: false
+        direct_access_grants_enabled: false
+        service_accounts_enabled: false
+        root_url: "{{ item.url }}"
+        base_url: "{{ item.url }}/"
+        redirect_uris: ["{{ item.url }}{{ item.redirection }}"]
+        web_origins: ["{{ item.url }}"]
+        attributes:
+          pkce.code.challenge.method: S256
+          post.logout.redirect.uris: "{{ item.url }}/*"
+        protocol_mappers:
+          - name: groupes
+            protocol: openid-connect
+            protocolMapper: oidc-group-membership-mapper
+            config:
+              claim.name: groups
+              full.path: "false"
+              id.token.claim: "true"
+              access.token.claim: "true"
+              userinfo.token.claim: "true"
+      loop: "{{ kc_clients | selectattr('secret') | list }}"
+      loop_control:
+        label: "{{ item.client_id }}"
+      no_log: true
+
     # --- Lister les comptes du realm (-e diag=true) --------------------------
     # Affiche identifiant, email, état et id de chaque compte. Pratique pour
     # vérifier qui existe sans ouvrir la console.
