@@ -98,7 +98,7 @@ est maintenant commun au cluster.
 ### 4. Vérifier le réveil
 
 ```bash
-ssh pve sudo poweroff; ssh pve2 sudo systemctl suspend
+ssh rasb extinction-pve                         # pve arrêté, pve2 en veille
 ssh rasb reveil-pve                              # les deux répondent
 ```
 
