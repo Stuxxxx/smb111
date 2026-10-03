@@ -40,6 +40,7 @@ admin_reveil_hyperviseur: false
 admin_reveil_hote: "{{ groups['proxmox'] | first }}"
 admin_reveil_commande: /usr/local/bin/reveil-pve
 admin_reveil_attente: 600       # secondes laissées aux VM pour répondre
+admin_reveil_attente_ntp: 300   # secondes laissées pour synchroniser l'heure
 admin_avec_pve: /usr/local/bin/smb111-avec-pve
 admin_reveil_verrou: "{{ admin_depot_auto }}/.git/smb111-tache.lock"
 
