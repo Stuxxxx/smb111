@@ -1,5 +1,5 @@
 ---
-# Supervision du SI (docs/supervision.md). Partagé par la VM sup (rôle
+# Supervision du SI (wiki : Supervision). Partagé par la VM sup (rôle
 # supervision), les agents de toutes les machines (rôle alloy), fw (ouverture
 # vers sup) et rasb (contrôle de veille).
 supervision_hote: sup

@@ -1,7 +1,7 @@
 ---
 # Agent de supervision Grafana Alloy, sur toutes les machines : métriques du
 # système (exportateur « unix », équivalent de node_exporter) et journal
-# systemd, envoyés à la VM sup (docs/supervision.md).
+# systemd, envoyés à la VM sup (wiki : Supervision).
 alloy_enabled: true
 
 # Nom de la machine dans la supervision (étiquette instance des métriques,

@@ -4,7 +4,7 @@
     that: supervision_grafana_admin_mdp | length >= 12
     fail_msg: >-
       vault_grafana_admin_mdp manquant ou trop court (12 caractères minimum) :
-      l'ajouter avec ansible-vault edit group_vars/all/vault.yml (docs/supervision.md).
+      l'ajouter avec ansible-vault edit group_vars/all/vault.yml (wiki : Supervision).
     quiet: true
 
 # --- Système ----------------------------------------------------------------

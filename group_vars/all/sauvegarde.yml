@@ -1,5 +1,5 @@
 ---
-# Sauvegarde de l'état persistant du SI (docs/sauvegarde.md).
+# Sauvegarde de l'état persistant du SI (wiki : Sauvegarde).
 #
 # rasb vient chercher les sauvegardes sur les VM (playbooks/sauvegarde.yml) :
 # le pare-feu interdit aux VM de joindre le réseau local, et rasb, hors de

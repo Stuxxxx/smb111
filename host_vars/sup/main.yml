@@ -1,5 +1,5 @@
 ---
-# VM de supervision (docs/supervision.md), sur le réseau local : rasb
+# VM de supervision (wiki : Supervision), sur le réseau local : rasb
 # l'administre en direct, ne jamais le bannir
 fail2ban_ignoreip: "127.0.0.1/8 ::1 {{ admin_ip_lan }}"
 

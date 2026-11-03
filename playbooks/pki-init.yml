@@ -26,7 +26,7 @@
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     regenerer: ""
     # Clé de la racine, chiffrée : écrite ici à la création, lue ici pour signer un
-    # nouvel intermédiaire (la renvoyer alors ici depuis son poste, docs/pki.md)
+    # nouvel intermédiaire (la renvoyer alors ici depuis son poste, wiki : PKI)
     pki_racine_cle: "{{ lookup('ansible.builtin.env', 'HOME') }}/pki-racine/racine.key"
     # Contrainte de noms commune aux deux CA (RFC 5280, critique)
     pki_contrainte_noms:
@@ -67,7 +67,7 @@
         that: pki_cle_racine.stat.exists
         fail_msg: >-
           Clé de la racine introuvable ({{ pki_racine_cle }}). La renvoyer depuis son
-          poste (docs/pki.md, étape 2), ou indiquer son emplacement : -e pki_racine_cle=...
+          poste (wiki : PKI, étape 2), ou indiquer son emplacement : -e pki_racine_cle=...
         quiet: true
       when: not creer_racine
 
@@ -234,8 +234,8 @@
           - "  openssl verify -CAfile pki/racine.crt pki/intermediaire.crt"
           - "  openssl x509 -in pki/intermediaire.crt -noout -ext nameConstraints"
           - "  head -1 pki/intermediaire.key          # doit afficher $ANSIBLE_VAULT;1.1;AES256"
-          - "Empreinte SHA-256 de la racine, à reporter dans docs/pki.md :"
+          - "Empreinte SHA-256 de la racine, à reporter dans la page PKI du wiki :"
           - "  {{ pki_racine_info.fingerprints.sha256 | upper }}"
           - "{{ ('Clé de la racine : ' ~ pki_racine_cle ~ ' -> la rapatrier sur son poste (scp rasb:pki-racine/racine.key .), puis : shred -u ' ~ pki_racine_cle) if creer_racine else '' }}"
-          - "Commiter : git add -A pki/ docs/pki.md && git commit"
+          - "Commiter : git add -A pki/ && git commit"
           - "Puis : ansible-playbook site.yml --tags pki,keycloak"

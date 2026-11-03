@@ -1,5 +1,5 @@
 ---
-# VM de supervision (docs/supervision.md) : Prometheus (métriques et règles
+# VM de supervision (wiki : Supervision) : Prometheus (métriques et règles
 # d'alerte), Alertmanager (e-mails), Loki (journaux) et Grafana (tableaux de
 # bord), en conteneurs Docker. Seul nginx écoute sur le réseau, en HTTPS ; les
 # autres n'écoutent que sur 127.0.0.1 (réseau de l'hôte, sans NAT Docker, pour
