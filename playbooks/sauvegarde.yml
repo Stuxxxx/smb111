@@ -1,5 +1,5 @@
 ---
-# Sauvegarde de l'état persistant du SI, rapatriée sur rasb (docs/sauvegarde.md).
+# Sauvegarde de l'état persistant du SI, rapatriée sur rasb (wiki : Sauvegarde).
 # Aujourd'hui : la base de Keycloak (comptes, groupes, double authentification).
 #
 #   ansible-playbook playbooks/sauvegarde.yml

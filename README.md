@@ -14,21 +14,21 @@ inventaire, variables, PKI et documentation.
 
 **Documentation :**
 
-| Fichier | Contenu |
+| Document | Contenu |
 |---|---|
 | ce README | comment obtenir un accès et comment le dépôt fonctionne |
 | [`guide-travail.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | la suite : configuration sur `rasb`, commandes du quotidien |
 | [`gestion-des-droits.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | modèle de droits complet, procédures de révocation |
 | [`installation-admin.md`](https://drive.google.com/drive/folders/1WJwpEPPmBV-zM0xtxLpxt1AR8KT95yFS) | état technique de la machine d'administration |
-| [`docs/procedure-keycloak.md`](docs/procedure-keycloak.md) | installation de la VM `idp` (Keycloak, SSO) |
-| [`docs/utilisation-idp.md`](docs/utilisation-idp.md) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
-| [`docs/reveil-pve.md`](docs/reveil-pve.md) | démarrer les hyperviseurs à distance (Wake-on-LAN) |
-| [`docs/cluster-proxmox.md`](docs/cluster-proxmox.md) | cluster Proxmox `pve` + `pve2` (portable) : préparation, création, quorum |
-| [`docs/relais-mail.md`](docs/relais-mail.md) | relais de messagerie sur `fw` : envoi des e-mails des VM |
-| [`docs/pki.md`](docs/pki.md) | PKI interne : création, émission des certificats, confiance sur les postes |
-| [`docs/sauvegarde.md`](docs/sauvegarde.md) | sauvegarde et restauration de Keycloak |
-| [`docs/notifications.md`](docs/notifications.md) | tâches programmées sur `rasb` et notifications des admins par e-mail |
-| [`docs/supervision.md`](docs/supervision.md) | supervision : VM `sup` (Prometheus, Loki, Grafana), alertes par e-mail, mise en place |
+| [Keycloak installation](https://github.com/Stuxxxx/smb111/wiki/Keycloak-installation) | installation de la VM `idp` (Keycloak, SSO) |
+| [Keycloak utilisation](https://github.com/Stuxxxx/smb111/wiki/Keycloak-utilisation) | utilisation de `idp` : accès, console, utilisateurs, dépannage |
+| [Reveil PVE](https://github.com/Stuxxxx/smb111/wiki/Reveil-PVE) | démarrer les hyperviseurs à distance (Wake-on-LAN) |
+| [Cluster Proxmox](https://github.com/Stuxxxx/smb111/wiki/Cluster-Proxmox) | cluster Proxmox `pve` + `pve2` (portable) : préparation, création, quorum |
+| [Relais mail](https://github.com/Stuxxxx/smb111/wiki/Relais-mail) | relais de messagerie sur `fw` : envoi des e-mails des VM |
+| [PKI](https://github.com/Stuxxxx/smb111/wiki/PKI) | PKI interne : création, émission des certificats, confiance sur les postes |
+| [Sauvegarde](https://github.com/Stuxxxx/smb111/wiki/Sauvegarde) | sauvegarde et restauration de Keycloak |
+| [Notifications](https://github.com/Stuxxxx/smb111/wiki/Notifications) | tâches programmées sur `rasb` et notifications des admins par e-mail |
+| [Supervision](https://github.com/Stuxxxx/smb111/wiki/Supervision) | supervision : VM `sup` (Prometheus, Loki, Grafana), alertes par e-mail, mise en place |
 
 ---
 

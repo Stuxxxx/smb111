@@ -1,6 +1,6 @@
 ---
 # Restauration de la base de Keycloak depuis une sauvegarde de rasb
-# (docs/sauvegarde.md). Une sauvegarde de sécurité de l'état actuel est faite
+# (wiki : Sauvegarde). Une sauvegarde de sécurité de l'état actuel est faite
 # avant d'écraser quoi que ce soit.
 #
 #   ansible-playbook playbooks/restauration.yml                      # liste les sauvegardes

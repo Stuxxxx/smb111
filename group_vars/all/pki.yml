@@ -1,5 +1,5 @@
 ---
-# PKI interne du SI (docs/pki.md).
+# PKI interne du SI (wiki : PKI).
 #
 #   racine          signe l'intermédiaire, et rien d'autre
 #   intermédiaire   signe les certificats des services (et, plus tard, cert-manager)

@@ -27,7 +27,7 @@ keycloak_db_password: "{{ vault_keycloak_db_password }}"
 keycloak_admin_user: admin-temp
 keycloak_admin_password: "{{ vault_keycloak_admin_password }}"
 
-# Certificat TLS émis par la PKI du SI (rôle certificat, docs/pki.md).
+# Certificat TLS émis par la PKI du SI (rôle certificat, wiki : PKI).
 # Pas de localhost : hors de la contrainte de noms de la PKI, il rendrait le
 # certificat invalide partout. Les appels faits depuis idp elle-même
 # (keycloak_comptes, état de santé) ne vérifient pas le certificat.

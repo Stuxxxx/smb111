@@ -1,4 +1,4 @@
-# Portable Proxmox, second nœud du cluster (docs/cluster-proxmox.md).
+# Portable Proxmox, second nœud du cluster (wiki : Cluster-Proxmox).
 # Il porte la VM de supervision (sup) ; il est réveillé et rendormi avec pve.
 pve_node: pve2
 # API de ce nœud, jointe depuis rasb par le réseau local

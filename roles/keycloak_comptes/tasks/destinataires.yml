@@ -1,5 +1,5 @@
 ---
-# Destinataires des notifications des administrateurs (docs/notifications.md) :
+# Destinataires des notifications des administrateurs (wiki : Notifications) :
 # les membres actifs du groupe kc_groupe_admin qui ont une adresse e-mail.
 # La liste est relevée ici, sur idp (l'API n'est pas ouverte à rasb), puis
 # écrite sur la machine d'administration, qui envoie les notifications.

@@ -8,7 +8,7 @@
       - certificat_ip | reject('match', (pki_reseau_ip | regex_replace('0/24$', '') | regex_escape) ~ '\d+$') | list | length == 0
     fail_msg: >-
       Seuls *.{{ pki_domaine }} et les adresses de {{ pki_reseau_ip }} peuvent être
-      certifiés (docs/pki.md). Demandé : {{ (certificat_dns + certificat_ip) | join(', ') }}
+      certifiés (wiki : PKI). Demandé : {{ (certificat_dns + certificat_ip) | join(', ') }}
     quiet: true
 
 - name: Bibliothèque cryptography (modules community.crypto)
