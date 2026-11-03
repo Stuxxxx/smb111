@@ -54,7 +54,7 @@ par la maintenance du dimanche est ainsi fait de lui-même à l'extinction qui s
 bilan l'annonce encore « à faire ».
 
 Si `pve` ne répond pas au réveil, la tâche échoue et les admins reçoivent l'e-mail d'échec
-habituel. Activé sur `rasb` par `admin_reveil_hyperviseur: true` (`host_vars/rasb.yml`).
+habituel. Activé sur `rasb` par `admin_reveil_hyperviseur: true` (`host_vars/rasb/main.yml`).
 
 Les mises à jour de sécurité quotidiennes (`unattended-upgrades`) se font au démarrage suivant
 de chaque machine : il suffit qu'elle soit allumée de temps en temps.
@@ -65,7 +65,7 @@ de chaque machine : il suffit qu'elle soit allumée de temps en temps.
 |---|---|
 | `pve`, `pve2` | service `wol-<carte>` : `ethtool -s <carte> wol g` à chaque démarrage (le pilote peut remettre le réglage à `d`) ; carte `wol_interface`, `eno1` par défaut, `nic0` pour `pve2` |
 | `rasb` | paquet `wakeonlan`, commande `/usr/local/bin/reveil-pve` |
-| `rasb` | commandes `/usr/local/bin/extinction-pve` et `/usr/local/bin/smb111-avec-pve` (rôle `admin`), qui éteint les nœuds et encadre les tâches de nuit |
+| `rasb` | commandes `/usr/local/bin/extinction-pve` et `/usr/local/bin/smb111-avec-pve` (rôle `poste_admin`), qui éteint les nœuds et encadre les tâches de nuit |
 | `rasb` | MAC de chaque nœud relevée pendant qu'il est allumé, dans `/etc/smb111/wol/<nœud>.mac` |
 
 Mise en place ou mise à jour : `ansible-playbook site.yml --limit pve,pve2 --tags wol` (nœuds

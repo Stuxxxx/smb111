@@ -1,0 +1,9 @@
+---
+# Accès des administrateurs : comptes, sudo et clés SSH.
+# Lancé seul (ansible-playbook playbooks/admins.yml), par site.yml et par
+# ansible-pull quand il est activé (admin_pull_playbook).
+- name: Gestion des administrateurs
+  hosts: all
+  become: true
+  roles:
+    - admins
