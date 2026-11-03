@@ -1,7 +1,7 @@
 # Tâches programmées et notifications
 
 `rasb` exécute seul les tâches de MCO / MCS, et prévient les administrateurs par e-mail quand
-quelque chose ne va pas. Tout est installé par le rôle `admin`.
+quelque chose ne va pas. Tout est installé par le rôle `poste_admin`.
 
 ---
 
@@ -12,7 +12,7 @@ quelque chose ne va pas. Tout est installé par le rôle `admin`.
 | `sauvegarde.timer` | chaque nuit, 02:00 | `playbooks/sauvegarde.yml` | **bilan HTML à chaque réussite** (`playbooks/templates/sauvegarde-bilan.html.j2`), ou échec |
 | `maintenance.timer` | dimanche, 03:00 | `playbooks/maintenance.yml` | **bilan HTML à chaque passage** (`playbooks/templates/maintenance-bilan.html.j2`), ou échec |
 | `check.timer` | chaque jour, 06:00 | `playbooks/check.yml` | **rapport HTML à chaque passage**, conforme ou non (`playbooks/templates/check-rapport.html.j2`), ou échec du playbook |
-| `ansible-pull.timer` | 10 min (désactivé) | `admins.yml` | en cas d'échec |
+| `ansible-pull.timer` | 10 min (désactivé) | `playbooks/admins.yml` | en cas d'échec |
 | `veille-supervision.timer` | toutes les 10 min | aucun (script `smb111-veille-supervision`) | « Supervision en panne » puis « rétablie », sans réveiller `pve2` ([supervision.md](supervision.md)) |
 
 Si `pve` est éteint, chaque tâche le réveille par Wake-on-LAN puis le rééteint après

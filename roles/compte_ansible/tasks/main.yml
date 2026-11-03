@@ -1,5 +1,5 @@
 ---
-# Les humains ont leur compte nominatif (admins.yml) ; le compte ansible ne sert
+# Les humains ont leur compte nominatif (rôle admins) ; le compte ansible ne sert
 # qu'à l'automatisation, depuis rasb uniquement.
 
 - name: Verrouiller le mot de passe du compte d'automatisation

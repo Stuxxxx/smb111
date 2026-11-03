@@ -7,3 +7,5 @@ wg-*.conf.example
 .ansible/
 # Clé de la racine de la PKI : hors ligne, jamais dans le dépôt
 pki/racine.key
+# Réglages personnels des éditeurs
+.vscode/
