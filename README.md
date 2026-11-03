@@ -2,8 +2,8 @@
 
 Déploiement et exposition sécurisée d'une application dans un SI automatisé.
 
-Ce dépôt contient **tout** ce qui permet de reconstruire le SI : playbooks Ansible,
-manifests Kubernetes, documentation et schémas.
+Ce dépôt contient **tout** ce qui permet de reconstruire le SI : playbooks et rôles Ansible,
+inventaire, variables, PKI et documentation.
 
 - **Machine d'administration** : `rasb` (Raspberry Pi 5), à l'adresse `192.168.1.90`.
   C'est depuis elle que tout est déployé.
@@ -183,10 +183,10 @@ fusion. Le résultat est visible dans l'onglet **Actions** et dans la Pull Reque
 
 ## 3. Convergence automatique (`ansible-pull`)
 
-> **État actuel : désactivé** (`admin_pull_enabled: false` dans `host_vars/rasb.yml`). Les
-> accès s'appliquent donc à la main, après fusion : `ansible-playbook admins.yml`.
+> **État actuel : désactivé** (`admin_pull_enabled: false` dans `host_vars/rasb/main.yml`). Les
+> accès s'appliquent donc à la main, après fusion : `ansible-playbook playbooks/admins.yml`.
 
-Une fois activé, un **timer systemd** installé par le rôle `admin` lance `ansible-pull` toutes
+Une fois activé, un **timer systemd** installé par le rôle `poste_admin` lance `ansible-pull` toutes
 les **10 minutes** sur `rasb`. Celui-ci clone `main` et applique le playbook **en local**, sans SSH.
 
 Conséquence directe : une clé SSH ajoutée à la main sur une machine, ou un fichier modifié hors
@@ -196,10 +196,10 @@ permanence.
 | Variable | Valeur sur `rasb` | Rôle |
 |---|---|---|
 | `admin_pull_enabled` | `false` (désactivé) | active ou désactive le timer |
-| `admin_pull_playbook` | `admins.yml` | ce qui est réappliqué automatiquement |
+| `admin_pull_playbook` | `playbooks/admins.yml` | ce qui est réappliqué automatiquement |
 | `admin_pull_interval` | `10min` | fréquence |
 
-Le pull est volontairement limité à `admins.yml` : les **accès** convergent seuls, tandis que
+Le pull est volontairement limité à `playbooks/admins.yml` : les **accès** convergent seuls, tandis que
 le reste de la configuration reste sous contrôle manuel pendant la phase de développement.
 
 ```bash
@@ -209,7 +209,7 @@ journalctl -u ansible-pull.service -n 30 --no-pager   # ce qu'a fait le dernier 
 ```
 
 **Suspendre** — temporairement : `sudo systemctl stop ansible-pull.timer` (sera rétabli au
-prochain `site.yml`). Durablement : `admin_pull_enabled: false` dans `host_vars/rasb.yml`,
+prochain `site.yml`). Durablement : `admin_pull_enabled: false` dans `host_vars/rasb/main.yml`,
 puis `ansible-playbook site.yml`.
 
 **Le piège** : tant qu'une branche n'est pas fusionnée, ce que tu appliques à la main et ce que
