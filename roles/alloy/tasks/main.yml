@@ -11,6 +11,24 @@
     mode: "0644"
   when: alloy_enabled | bool
 
+# Sur les VM créées par cloud-init, /etc/hosts est réécrit à chaque démarrage
+# à partir de ce modèle (manage_etc_hosts) : sans la ligne ici aussi, l'agent
+# perd le nom de sup au premier redémarrage et la machine devient « muette ».
+- name: Modèle cloud-init de /etc/hosts
+  ansible.builtin.stat:
+    path: /etc/cloud/templates/hosts.debian.tmpl
+  register: alloy_modele_hosts
+  when: alloy_enabled | bool
+
+- name: Nom de la supervision, conservé au redémarrage
+  ansible.builtin.lineinfile:
+    path: /etc/cloud/templates/hosts.debian.tmpl
+    regexp: '\s{{ supervision_nom | regex_escape }}(\s|$)'
+    line: "{{ supervision_ip }} {{ supervision_nom }} {{ supervision_hote }}"
+  when:
+    - alloy_enabled | bool
+    - alloy_modele_hosts.stat.exists | default(false)
+
 - name: Répertoire des clés des dépôts APT
   ansible.builtin.file:
     path: /etc/apt/keyrings
