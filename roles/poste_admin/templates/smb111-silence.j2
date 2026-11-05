@@ -1,0 +1,76 @@
+#!/bin/bash
+# Géré par Ansible — toute modification manuelle sera écrasée
+# Silence des alertes de la supervision autour de l'extinction et du réveil
+# des hyperviseurs (wiki : Supervision). Appelé par extinction-pve et reveil-pve.
+#
+#   smb111-silence poser <minutes> "motif"   tait toutes les alertes, sauf Watchdog
+#   smb111-silence lever                     retire les silences posés ici
+#
+# Un seul silence de cette commande à la fois : poser crée le nouveau, puis
+# retire les précédents (aucun trou entre les deux). Ceux posés à la main dans
+# Alertmanager ne sont jamais touchés.
+set -uo pipefail
+
+api="https://{{ supervision_nom }}:{{ supervision_port_alertes }}/api/v2"
+auteur="smb111-silence"
+
+appel() {
+  curl --silent --show-error --fail --max-time 10 \
+    --cacert /usr/local/share/ca-certificates/smb111-racine.crt "$@"
+}
+
+# sup peut mettre un moment à répondre juste après le réveil de pve2
+attendre_sup() {
+  for _ in $(seq 1 "$1"); do
+    appel "$api/silences" >/dev/null 2>&1 && return 0
+    sleep 5
+  done
+  echo "Silence des alertes impossible : {{ supervision_nom }} ne répond pas." >&2
+  return 1
+}
+
+nos_silences() {
+  appel "$api/silences" | jq -r --arg a "$auteur" \
+    '.[] | select(.createdBy == $a and .status.state != "expired") | .id'
+}
+
+retirer() {
+  local id
+  for id in "$@"; do
+    [ -n "$id" ] && appel -X DELETE "$api/silence/$id" >/dev/null
+  done
+}
+
+case "${1:-}" in
+  poser)
+    minutes="${2:?usage : smb111-silence poser <minutes> \"motif\"}"
+    motif="${3:-posé par smb111-silence}"
+    attendre_sup 24 || exit 1
+    mapfile -t anciens < <(nos_silences)
+    # Toutes les alertes sauf Watchdog. Alertmanager exige au moins un critère
+    # qui ne vaut pas pour une étiquette vide, d'où « .+ ».
+    # Début dans le passé : Alertmanager le ramène à son heure à lui, même si
+    # l'horloge de sup retarde juste après la sortie de veille
+    corps="$(jq -n \
+      --arg debut "$(date -u -d '-1 day' +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg fin "$(date -u -d "+$minutes min" +%Y-%m-%dT%H:%M:%SZ)" \
+      --arg auteur "$auteur" --arg motif "$motif ($(hostname))" \
+      '{matchers: [{name: "alertname", value: ".+", isRegex: true, isEqual: true},
+                   {name: "alertname", value: "Watchdog", isRegex: false, isEqual: false}],
+        startsAt: $debut, endsAt: $fin, createdBy: $auteur, comment: $motif}')"
+    id="$(appel -X POST -H 'Content-Type: application/json' -d "$corps" "$api/silences" | jq -r '.silenceID')" \
+      || { echo "Silence des alertes refusé par Alertmanager." >&2; exit 1; }
+    retirer "${anciens[@]}"
+    echo "Alertes tues pendant $minutes min ($motif), silence $id."
+    ;;
+  lever)
+    attendre_sup 3 || exit 1
+    mapfile -t anciens < <(nos_silences)
+    retirer "${anciens[@]}"
+    echo "Silence des alertes levé."
+    ;;
+  *)
+    echo "usage : smb111-silence poser <minutes> \"motif\" | lever" >&2
+    exit 2
+    ;;
+esac

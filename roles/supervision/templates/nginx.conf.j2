@@ -72,13 +72,24 @@ http {
     location / { return 404; }
   }
 
-  # Lecture seule des alertes en cours, pour le contrôle de veille de rasb
+  # Alertes en cours (lecture seule), pour le contrôle de veille de rasb,
+  # et silences des alertes autour de l'extinction des hyperviseurs
   server {
     listen {{ supervision_ip }}:{{ supervision_port_alertes }} ssl;
     server_name {{ supervision_nom }};
 
     location = /api/v2/alerts {
       limit_except GET { deny all; }
+      proxy_pass http://127.0.0.1:9093;
+    }
+    # Silences posés par rasb (smb111-silence) autour de l'extinction et du
+    # réveil des hyperviseurs : lister, créer, et retirer un silence
+    location = /api/v2/silences {
+      limit_except GET POST { deny all; }
+      proxy_pass http://127.0.0.1:9093;
+    }
+    location ^~ /api/v2/silence/ {
+      limit_except DELETE { deny all; }
       proxy_pass http://127.0.0.1:9093;
     }
     location / { return 404; }
