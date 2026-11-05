@@ -19,6 +19,11 @@ hyperviseurs=(
 )
 repond() { timeout 2 bash -c ": > /dev/tcp/$1/22" 2>/dev/null; }
 
+# Hyperviseur qui porte sup : tant qu'il est éteint, ses alertes sont tues
+# (sinon une salve de MachineMuette part au réveil, wiki : Supervision)
+noeud_sup="{{ vms | selectattr('name', 'equalto', supervision_hote) | map(attribute='node') | first | default('') }}"
+silence="{{ supervision_silence_commande }}"
+
 # Lancée en arrière-plan sur le nœud : la connexion se coupe pendant l'arrêt
 eteindre() {
   ansible "$1" -b -B 120 -P 0 -m ansible.builtin.shell -a "sleep 5; systemctl $2" >/dev/null \
@@ -33,6 +38,14 @@ for ligne in "${hyperviseurs[@]}"; do
 done
 
 rc=0
+tait=0
+for ligne in "${cibles[@]}"; do
+  read -r nom _ <<<"$ligne"
+  if [ "$nom" = "$noeud_sup" ] && [ -x "$silence" ]; then
+    "$silence" poser {{ supervision_silence_extinction }} "Hyperviseurs éteints par extinction-pve" && tait=1
+  fi
+done
+
 arretes=()
 for ligne in "${cibles[@]}"; do
   read -r nom ip extinction <<<"$ligne"
@@ -47,7 +60,21 @@ for ligne in "${cibles[@]}"; do
   read -r nom ip extinction <<<"$ligne"
   [ "$extinction" = suspend ] || continue
   echo "Mise en veille de $nom."
-  eteindre "$nom" suspend || rc=1
+  if eteindre "$nom" suspend; then arretes+=("$ip"); else rc=1; fi
 done
+for ip in "${arretes[@]}"; do
+  for _ in $(seq 1 60); do repond "$ip" || break; sleep 3; done
+done
+
+# L'hyperviseur de sup est resté allumé : ses alertes doivent repartir
+if [ "$tait" = 1 ]; then
+  for ligne in "${cibles[@]}"; do
+    read -r nom ip _ <<<"$ligne"
+    if [ "$nom" = "$noeud_sup" ] && repond "$ip"; then
+      echo "$nom est resté allumé : alertes rétablies."
+      "$silence" lever
+    fi
+  done
+fi
 
 exit "$rc"

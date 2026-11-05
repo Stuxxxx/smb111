@@ -10,7 +10,16 @@ supervision_nom: "{{ supervision_hote }}.{{ domaine_interne }}"
 supervision_port_grafana: 443        # tableaux de bord, pour les admins (par rasb)
 supervision_port_metriques: 9090     # réception des métriques (Prometheus remote write)
 supervision_port_journaux: 3100      # réception des journaux (Loki)
-supervision_port_alertes: 9093       # lecture des alertes, pour le contrôle de veille de rasb
+supervision_port_alertes: 9093       # alertes et silences, pour rasb (veille, extinction des hyperviseurs)
+
+# Silences des alertes autour de l'extinction et du réveil des hyperviseurs
+# (commande smb111-silence de rasb). Hyperviseurs éteints ou en veille, sup
+# reprend au réveil avec ses alertes d'avant l'extinction et les machines pas
+# encore redémarrées : sans silence, une salve de MachineMuette part à chaque
+# réveil. Toutes les alertes sont tues, sauf Watchdog (contrôle de veille).
+supervision_silence_commande: /usr/local/bin/smb111-silence
+supervision_silence_extinction: 10080   # minutes (7 jours) ; remplacé au réveil
+supervision_silence_reveil: 20          # minutes laissées aux VM après le réveil
 
 # Machines dont les agents envoient à sup. Les VM internes sortent par la NAT
 # de fw : sup les voit avec l'adresse externe de fw.

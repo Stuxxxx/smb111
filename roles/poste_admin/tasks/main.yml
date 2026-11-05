@@ -45,6 +45,7 @@
   loop:
     - { src: extinction-pve.j2, dest: "{{ admin_extinction_commande }}" }
     - { src: smb111-avec-pve.j2, dest: "{{ admin_avec_pve }}" }
+    - { src: smb111-silence.j2, dest: "{{ supervision_silence_commande }}" }
   loop_control:
     label: "{{ item.dest }}"
   when: admin_reveil_hyperviseur | bool
