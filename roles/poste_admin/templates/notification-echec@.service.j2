@@ -2,7 +2,13 @@
 # Instancié par OnFailure=notification-echec@%n.service : %i est l'unité en échec.
 [Unit]
 Description=Notification par e-mail de l'échec de %i
+# Nouvel essai toutes les 5 min pendant une heure si l'envoi échoue (réseau ou
+# DNS coupé) : sans cela, l'e-mail d'échec est perdu.
+StartLimitIntervalSec=2h
+StartLimitBurst=13
 
 [Service]
 Type=oneshot
 ExecStart={{ admin_notifier_echec }} %i
+Restart=on-failure
+RestartSec=5min
