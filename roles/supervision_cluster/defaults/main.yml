@@ -1,0 +1,32 @@
+---
+# Collecteurs de supervision dans le cluster (wiki : Supervision, Kubernetes).
+# Ils envoient à sup, comme les agents des machines :
+#   kube-state-metrics  état des objets : nœuds Ready, pods, déploiements…
+#   Alloy               relève kube-state-metrics et la consommation des pods
+#                       (cAdvisor de chaque nœud, via l'API), et les journaux
+#                       de tous les pods, puis pousse le tout vers sup.
+supervision_cluster_namespace: supervision
+supervision_cluster_nom: smb111          # étiquette cluster des métriques
+
+supervision_cluster_ksm_image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.19.1
+supervision_cluster_alloy_image: docker.io/grafana/alloy:v1.20.1
+supervision_cluster_intervalle: 30s
+
+# Objets suivis par kube-state-metrics (et droits de lecture associés)
+supervision_cluster_ksm_ressources:
+  - { nom: nodes, groupe: "" }
+  - { nom: pods, groupe: "" }
+  - { nom: namespaces, groupe: "" }
+  - { nom: services, groupe: "" }
+  - { nom: persistentvolumeclaims, groupe: "" }
+  - { nom: persistentvolumes, groupe: "" }
+  - { nom: deployments, groupe: apps }
+  - { nom: replicasets, groupe: apps }
+  - { nom: daemonsets, groupe: apps }
+  - { nom: statefulsets, groupe: apps }
+  - { nom: jobs, groupe: batch }
+  - { nom: cronjobs, groupe: batch }
+
+# Destinations, les mêmes que pour les agents des machines (rôle alloy)
+supervision_cluster_url_metriques: "https://{{ supervision_nom }}:{{ supervision_port_metriques }}/api/v1/write"
+supervision_cluster_url_journaux: "https://{{ supervision_nom }}:{{ supervision_port_journaux }}/loki/api/v1/push"

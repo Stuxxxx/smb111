@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ supervision_cluster_namespace }}
+---
+# Autorité racine de la PKI : Alloy vérifie le certificat de sup avec elle
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smb111-racine
+  namespace: {{ supervision_cluster_namespace }}
+data:
+  racine.crt: |
+    {{ lookup('ansible.builtin.file', pki_dir ~ '/racine.crt') | indent(4) }}

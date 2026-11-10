@@ -1,0 +1,118 @@
+// {{ ansible_managed }}
+// Alloy du cluster (rôle supervision_cluster) : métriques et journaux vers {{ supervision_nom }}
+
+// --- Métriques : consommation des pods (cAdvisor de chaque nœud) ---------
+discovery.kubernetes "noeuds" {
+  role = "node"
+}
+
+discovery.relabel "cadvisor" {
+  targets = discovery.kubernetes.noeuds.targets
+
+  rule {
+    target_label = "__address__"
+    replacement  = "kubernetes.default.svc:443"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    regex         = "(.+)"
+    replacement   = "/api/v1/nodes/${1}/proxy/metrics/cadvisor"
+    target_label  = "__metrics_path__"
+  }
+  // Le nom du nœud, comme celui de l'agent de la machine
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "instance"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node"
+  }
+}
+
+prometheus.scrape "cadvisor" {
+  targets           = discovery.relabel.cadvisor.output
+  job_name          = "cadvisor"
+  scheme            = "https"
+  scrape_interval   = "{{ supervision_cluster_intervalle }}"
+  bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+  tls_config {
+    ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+  }
+  forward_to = [prometheus.relabel.cluster.receiver]
+}
+
+// --- Métriques : état des objets (kube-state-metrics) ---------------------
+prometheus.scrape "kube_state_metrics" {
+  targets         = [{"__address__" = "kube-state-metrics.{{ supervision_cluster_namespace }}.svc:8080"}]
+  job_name        = "kube-state-metrics"
+  scrape_interval = "{{ supervision_cluster_intervalle }}"
+  forward_to      = [prometheus.relabel.cluster.receiver]
+}
+
+prometheus.relabel "cluster" {
+  forward_to = [prometheus.remote_write.sup.receiver]
+
+  rule {
+    target_label = "cluster"
+    replacement  = "{{ supervision_cluster_nom }}"
+  }
+}
+
+prometheus.remote_write "sup" {
+  endpoint {
+    url = "{{ supervision_cluster_url_metriques }}"
+
+    tls_config {
+      ca_file = "/etc/smb111/racine.crt"
+    }
+  }
+}
+
+// --- Journaux de tous les pods ----------------------------------------------
+discovery.kubernetes "pods" {
+  role = "pod"
+}
+
+discovery.relabel "pods" {
+  targets = discovery.kubernetes.pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_kubernetes_pod_node_name"]
+    target_label  = "host"
+  }
+}
+
+loki.source.kubernetes "pods" {
+  targets    = discovery.relabel.pods.output
+  forward_to = [loki.process.pods.receiver]
+}
+
+loki.process "pods" {
+  stage.static_labels {
+    values = { job = "kubernetes", cluster = "{{ supervision_cluster_nom }}" }
+  }
+  forward_to = [loki.write.sup.receiver]
+}
+
+loki.write "sup" {
+  endpoint {
+    url = "{{ supervision_cluster_url_journaux }}"
+
+    tls_config {
+      ca_file = "/etc/smb111/racine.crt"
+    }
+  }
+}

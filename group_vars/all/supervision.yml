@@ -37,6 +37,6 @@ supervision_oidc_client: grafana
 supervision_oidc_secret: "{{ vault_grafana_oidc_secret | default('') }}"
 supervision_idp_ip: "{{ vms | selectattr('name', 'equalto', 'idp') | map(attribute='ip') | first }}"
 
-# Kubernetes : règles et tableaux de bord du cluster, à activer une fois k3s
-# déployé avec ses collecteurs (kube-state-metrics, Alloy)
-supervision_kubernetes: false
+# Kubernetes : règles d'alerte du cluster. Ses collecteurs (kube-state-metrics,
+# Alloy) sont déployés dans le cluster par le rôle supervision_cluster.
+supervision_kubernetes: true

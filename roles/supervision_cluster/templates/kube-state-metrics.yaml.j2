@@ -1,0 +1,80 @@
+# {{ ansible_managed }}
+# kube-state-metrics : traduit l'état des objets Kubernetes en métriques
+# (kube_node_status_condition, kube_pod_status_phase, kube_deployment_*…)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-state-metrics
+  namespace: {{ supervision_cluster_namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kube-state-metrics
+rules:
+{% for groupe, ressources in supervision_cluster_ksm_ressources | groupby('groupe') %}
+  - apiGroups: ["{{ groupe }}"]
+    resources: {{ ressources | map(attribute='nom') | list | to_json }}
+    verbs: [list, watch]
+{% endfor %}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kube-state-metrics
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kube-state-metrics
+subjects:
+  - kind: ServiceAccount
+    name: kube-state-metrics
+    namespace: {{ supervision_cluster_namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-state-metrics
+  namespace: {{ supervision_cluster_namespace }}
+  labels: { app: kube-state-metrics }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kube-state-metrics }
+  template:
+    metadata:
+      labels: { app: kube-state-metrics }
+    spec:
+      serviceAccountName: kube-state-metrics
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: kube-state-metrics
+          image: {{ supervision_cluster_ksm_image }}
+          args:
+            - --resources={{ supervision_cluster_ksm_ressources | map(attribute='nom') | join(',') }}
+          ports:
+            - { name: metriques, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8081 }
+          livenessProbe:
+            httpGet: { path: /livez, port: 8080 }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 192Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-state-metrics
+  namespace: {{ supervision_cluster_namespace }}
+spec:
+  selector: { app: kube-state-metrics }
+  ports:
+    - { name: metriques, port: 8080, targetPort: metriques }

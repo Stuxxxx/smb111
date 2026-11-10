@@ -1,0 +1,25 @@
+---
+# Lancé depuis rasb, qui pilote le cluster par l'API (kubeconfig du rôle k3s).
+# Les manifestes sont dans templates/ : un fichier par composant.
+
+- name: Collecteurs de supervision du cluster
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    state: present
+    apply: true
+    template: "{{ item }}"
+  loop:
+    - namespace.yaml.j2
+    - kube-state-metrics.yaml.j2
+    - alloy.yaml.j2
+
+- name: Les collecteurs tournent
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    kind: Deployment
+    namespace: "{{ supervision_cluster_namespace }}"
+    name: "{{ item }}"
+    wait: true
+    wait_condition: { type: Available, status: "True" }
+    wait_timeout: 300
+  loop: [kube-state-metrics, alloy]
