@@ -62,6 +62,14 @@
     - role: k3s
       tags: [k3s]
 
+# Services du cluster, pilotés depuis rasb par l'API Kubernetes
+- name: Services du cluster
+  hosts: admin
+  become: true
+  roles:
+    - role: cert_manager
+      tags: [cert_manager, tls]
+
 - name: Supervision (Prometheus, Loki, Alertmanager, Grafana)
   hosts: supervision
   become: true
