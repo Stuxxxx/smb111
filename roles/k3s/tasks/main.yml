@@ -1,0 +1,83 @@
+---
+# Cluster Kubernetes k3s (wiki : Kubernetes).
+# Le premier control-plane crée le cluster, puis les autres nœuds le
+# rejoignent avec le jeton qu'il a généré : aucun secret dans le dépôt.
+
+- name: Binaire k3s {{ k3s_version }}
+  ansible.builtin.get_url:
+    url: "{{ k3s_depot }}/k3s"
+    checksum: "sha256:{{ k3s_depot }}/sha256sum-amd64.txt"
+    dest: "{{ k3s_binaire }}"
+    owner: root
+    group: root
+    mode: "0755"
+  vars:
+    k3s_depot: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}"
+  register: k3s_bin
+
+# k3s est multi-usage : appelé sous un autre nom, il devient cet outil
+- name: Commandes kubectl, crictl et ctr
+  ansible.builtin.file:
+    src: "{{ k3s_binaire }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+  loop: [kubectl, crictl, ctr]
+
+- name: Dossier de configuration
+  ansible.builtin.file:
+    path: "{{ k3s_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# --- 1. Le premier control-plane crée le cluster ------------------------------
+- name: Création du cluster sur {{ k3s_premier }}
+  ansible.builtin.include_tasks: noeud.yml
+  when: inventory_hostname == k3s_premier
+
+- name: Jeton du cluster créé par {{ k3s_premier }}
+  ansible.builtin.slurp:
+    src: "{{ k3s_token_fichier }}"
+  delegate_to: "{{ k3s_premier }}"
+  run_once: true
+  register: k3s_token_lu
+  no_log: true
+
+- name: Jeton connu de tous les nœuds
+  ansible.builtin.set_fact:
+    k3s_token: "{{ k3s_token_lu.content | b64decode | trim }}"
+  no_log: true
+
+# --- 2. Les autres nœuds le rejoignent ----------------------------------------
+- name: Les autres nœuds rejoignent le cluster
+  ansible.builtin.include_tasks: noeud.yml
+  when: inventory_hostname != k3s_premier
+
+- name: Le nœud est Ready
+  ansible.builtin.command:
+    argv: [kubectl, wait, --for=condition=Ready, "node/{{ inventory_hostname }}", --timeout=300s]
+  delegate_to: "{{ k3s_premier }}"
+  changed_when: false
+
+# --- 3. Accès des administrateurs depuis rasb ---------------------------------
+- name: kubeconfig d'administration
+  run_once: true
+  block:
+    - name: Lire le kubeconfig de {{ k3s_premier }}
+      ansible.builtin.slurp:
+        src: "{{ k3s_config_dir }}/k3s.yaml"
+      delegate_to: "{{ k3s_premier }}"
+      register: k3s_kubeconfig_lu
+      no_log: true
+
+    # Le fichier vise 127.0.0.1 : on le fait pointer vers l'API du premier control-plane
+    - name: kubeconfig déposé sur rasb
+      ansible.builtin.copy:
+        content: "{{ k3s_kubeconfig_lu.content | b64decode | replace('https://127.0.0.1:' ~ k3s_api_port, k3s_api_url) }}"
+        dest: "{{ k3s_kubeconfig }}"
+        owner: root
+        group: admins
+        mode: "0640"
+      delegate_to: "{{ groups['admin'] | first }}"
+      no_log: true

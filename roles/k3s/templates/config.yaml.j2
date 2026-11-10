@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# Configuration de k3s sur {{ inventory_hostname }} ({{ 'control-plane' if k3s_serveur else 'worker' }})
+node-ip: {{ ansible_host }}
+{% if inventory_hostname == k3s_premier %}
+# Premier control-plane : crée le cluster et son etcd embarqué
+cluster-init: true
+{% else %}
+# Rejoint le cluster créé par {{ k3s_premier }}
+server: {{ k3s_api_url }}
+token: {{ k3s_token | to_json }}
+{% endif %}
+{% if k3s_serveur %}
+tls-san:
+{% for san in k3s_tls_san %}
+  - {{ san }}
+{% endfor %}
+write-kubeconfig-mode: "0600"
+secrets-encryption: {{ k3s_chiffrement_secrets | lower }}
+{% if k3s_isoler_control_plane %}
+node-taint:
+  - node-role.kubernetes.io/control-plane:NoSchedule
+{% endif %}
+{% for cle, valeur in k3s_serveur_options.items() %}
+{{ cle }}: {{ valeur | to_json }}
+{% endfor %}
+{% endif %}

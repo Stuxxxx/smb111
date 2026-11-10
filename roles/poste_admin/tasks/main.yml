@@ -6,6 +6,10 @@
   ansible.builtin.import_tasks: notifications.yml
   when: admin_notifications_enabled | bool
 
+- name: kubectl, à la version du cluster
+  ansible.builtin.import_tasks: kubectl.yml
+  tags: [k3s]
+
 # Les tâches programmées n'utilisent pas un clone personnel, qui peut être sur
 # une branche en cours : elles ont le leur, réaligné sur la branche de
 # référence avant chaque exécution (ExecStartPre des services).
