@@ -42,11 +42,14 @@
   become_user: postgres
   changed_when: false
 
+# Groupe admins et setgid : une sauvegarde déposée par un admin (ou par le
+# timer) reste lisible par tous les autres, pour restaurer comme pour vérifier.
 - name: Dossier de idp sur rasb
   ansible.builtin.file:
     path: "{{ sauvegarde_dir }}/{{ inventory_hostname }}"
     state: directory
-    mode: "0770"
+    group: admins
+    mode: "2770"
   delegate_to: localhost
   become: false
 
@@ -59,6 +62,7 @@
 - name: Droits de la copie sur rasb
   ansible.builtin.file:
     path: "{{ sauvegarde_dir }}/{{ inventory_hostname }}/{{ export_fichier }}"
+    group: admins
     mode: "0640"
   delegate_to: localhost
   become: false
