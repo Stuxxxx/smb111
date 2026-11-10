@@ -1,0 +1,89 @@
+---
+# Lancé depuis rasb, qui pilote le cluster par l'API (kubeconfig du rôle k3s).
+
+- name: Manifeste de cert-manager {{ cert_manager_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.yaml"
+    dest: "/var/cache/smb111-cert-manager-{{ cert_manager_version }}.yaml"
+    checksum: "sha256:{{ cert_manager_sha256 }}"
+    mode: "0644"
+
+- name: Installation de cert-manager
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    src: "/var/cache/smb111-cert-manager-{{ cert_manager_version }}.yaml"
+    state: present
+    apply: true
+
+# Le webhook doit répondre avant qu'on crée l'émetteur
+- name: cert-manager prêt
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    kind: Deployment
+    namespace: "{{ cert_manager_namespace }}"
+    name: "{{ item }}"
+    wait: true
+    wait_condition: { type: Available, status: "True" }
+    wait_timeout: 300
+  loop: [cert-manager, cert-manager-cainjector, cert-manager-webhook]
+
+# L'intermédiaire de la PKI, clé comprise : cert-manager signe avec. La clé
+# vient du vault ; dans le cluster, les Secrets sont chiffrés au repos (rôle k3s).
+- name: Autorité de signature (intermédiaire de la PKI)
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      type: kubernetes.io/tls
+      metadata:
+        name: "{{ cert_manager_secret_ca }}"
+        namespace: "{{ cert_manager_namespace }}"
+      data:
+        tls.crt: "{{ lookup('ansible.builtin.file', pki_dir ~ '/intermediaire.crt') | b64encode }}"
+        tls.key: "{{ lookup('ansible.builtin.unvault', pki_dir ~ '/intermediaire.key') | b64encode }}"
+  no_log: true
+
+- name: Émetteur {{ cert_manager_issuer }} pour tout le cluster
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: ClusterIssuer
+      metadata:
+        name: "{{ cert_manager_issuer }}"
+      spec:
+        ca:
+          secretName: "{{ cert_manager_secret_ca }}"
+
+- name: Certificat de contrôle
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      metadata:
+        name: verification-pki
+        namespace: "{{ cert_manager_namespace }}"
+      spec:
+        secretName: verification-pki
+        dnsNames: ["{{ cert_manager_test_dns }}"]
+        duration: 2160h       # 90 jours, renouvelé 30 jours avant
+        renewBefore: 720h
+        issuerRef:
+          kind: ClusterIssuer
+          name: "{{ cert_manager_issuer }}"
+
+- name: Le certificat de contrôle est émis
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    namespace: "{{ cert_manager_namespace }}"
+    name: verification-pki
+    wait: true
+    wait_condition: { type: Ready, status: "True" }
+    wait_timeout: 120
