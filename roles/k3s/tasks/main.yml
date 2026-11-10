@@ -81,3 +81,16 @@
         mode: "0640"
       delegate_to: "{{ groups['admin'] | first }}"
       no_log: true
+
+    # Même cluster, mais connexion par Keycloak : aucun secret dans ce fichier.
+    # L'autorité du cluster est publique (elle ne fait que vérifier l'API).
+    - name: kubeconfig des personnes (connexion par Keycloak)
+      ansible.builtin.template:
+        src: kubeconfig-oidc.yaml.j2
+        dest: "{{ k3s_kubeconfig_oidc }}"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        k3s_ca_cluster: "{{ (k3s_kubeconfig_lu.content | b64decode | from_yaml).clusters[0].cluster['certificate-authority-data'] }}"
+      delegate_to: "{{ groups['admin'] | first }}"

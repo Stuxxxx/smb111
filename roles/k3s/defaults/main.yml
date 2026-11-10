@@ -21,5 +21,16 @@ k3s_isoler_control_plane: true
 # Chiffrement au repos des Secrets Kubernetes dans etcd (RGPD, wiki : Kubernetes)
 k3s_chiffrement_secrets: true
 
-# Options supplémentaires du serveur (ex. OIDC de l'API, étape Keycloak)
-k3s_serveur_options: {}
+# Options supplémentaires du serveur. L'API accepte les jetons de Keycloak :
+# le compte vient de preferred_username, les groupes de l'attribut groups,
+# tous deux préfixés (oidc:sacha, oidc:admins) pour ne jamais se confondre
+# avec un compte interne de Kubernetes.
+k3s_serveur_options:
+  kube-apiserver-arg:
+    - "oidc-issuer-url={{ k3s_oidc_issuer }}"
+    - "oidc-client-id={{ k3s_oidc_client }}"
+    - "oidc-ca-file={{ k3s_oidc_ca }}"
+    - oidc-username-claim=preferred_username
+    - "oidc-username-prefix={{ k3s_oidc_prefixe }}"
+    - oidc-groups-claim=groups
+    - "oidc-groups-prefix={{ k3s_oidc_prefixe }}"

@@ -1,0 +1,23 @@
+---
+# Lancé depuis rasb, qui pilote le cluster par l'API (kubeconfig du rôle k3s).
+- name: Droits des groupes Keycloak dans le cluster
+  kubernetes.core.k8s:
+    kubeconfig: "{{ k3s_kubeconfig }}"
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: "keycloak-{{ item.groupe }}"
+        labels: { smb111/source: keycloak }
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ item.role }}"
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: "{{ k3s_oidc_prefixe }}{{ item.groupe }}"
+  loop: "{{ k8s_droits }}"
+  loop_control:
+    label: "{{ item.groupe }} → {{ item.role }}"

@@ -16,13 +16,42 @@
     k3s_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
     k3s_fichier: "{{ 'k3s-arm64' if k3s_arch == 'arm64' else 'k3s' }}"
 
-# Chaque admin utilise le kubeconfig déposé par le rôle k3s, sans rien régler
+# Plugin kubectl oidc-login : connexion au cluster par Keycloak
+- name: kubelogin {{ kubelogin_version }}
+  ansible.builtin.get_url:
+    url: "https://github.com/int128/kubelogin/releases/download/{{ kubelogin_version }}/kubelogin_linux_{{ kubelogin_arch }}.zip"
+    checksum: "sha256:{{ kubelogin_sha256[kubelogin_arch] }}"
+    dest: "/var/cache/kubelogin-{{ kubelogin_version }}-{{ kubelogin_arch }}.zip"
+    mode: "0644"
+  vars:
+    kubelogin_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+  register: kubelogin_archive
+
+- name: Commande kubectl-oidc_login
+  ansible.builtin.unarchive:
+    src: "{{ kubelogin_archive.dest }}"
+    dest: /usr/local/bin
+    remote_src: true
+    include: [kubelogin]
+    mode: "0755"
+  when: kubelogin_archive is changed
+
+- name: Lien kubectl-oidc_login
+  ansible.builtin.file:
+    src: /usr/local/bin/kubelogin
+    dest: /usr/local/bin/kubectl-oidc_login
+    state: link
+    force: true
+
+# Chaque personne se connecte avec son compte Keycloak, sans rien régler.
+# Le kubeconfig d'administration (certificat) reste pour Ansible et le secours :
+#   KUBECONFIG={{ k3s_kubeconfig }} kubectl …
 - name: KUBECONFIG pour les sessions des admins
   ansible.builtin.copy:
     dest: /etc/profile.d/smb111-kubeconfig.sh
     content: |
-      # Géré par Ansible (rôle poste_admin) : accès au cluster k3s
-      export KUBECONFIG={{ k3s_kubeconfig }}
+      # Géré par Ansible (rôle poste_admin) : accès au cluster k3s par Keycloak
+      export KUBECONFIG={{ k3s_kubeconfig_oidc }}
     owner: root
     group: root
     mode: "0644"
