@@ -1,0 +1,11 @@
+---
+# Cluster Kubernetes k3s (wiki : Kubernetes).
+#
+# Version partagée par les nœuds (rôle k3s) et par kubectl sur rasb (rôle
+# poste_admin) : client et serveur restent à la même version. La changer ici
+# met à jour tout le cluster au passage suivant, un nœud à la fois.
+k3s_version: v1.37.2+k3s1
+
+# kubeconfig d'administration du cluster, déposé sur rasb par le rôle k3s.
+# Groupe admins, 0640 : même niveau de confiance que le vault.
+k3s_kubeconfig: /etc/smb111/kubeconfig

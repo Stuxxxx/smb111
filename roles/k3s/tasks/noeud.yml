@@ -1,0 +1,37 @@
+---
+# Configuration et démarrage de k3s sur un nœud (inclus deux fois par main.yml)
+
+- name: Configuration de k3s
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ k3s_config_dir }}/config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+  register: k3s_conf
+  no_log: true          # contient le jeton du cluster
+
+- name: Service {{ k3s_service }}
+  ansible.builtin.template:
+    src: k3s.service.j2
+    dest: "/etc/systemd/system/{{ k3s_service }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  register: k3s_unit
+
+# Redémarré seulement si quelque chose a changé, et un nœud à la fois :
+# redémarrer les 3 control-plane ensemble ferait perdre le quorum d'etcd.
+- name: k3s démarré
+  ansible.builtin.systemd_service:
+    name: "{{ k3s_service }}"
+    state: "{{ 'restarted' if (k3s_bin is changed or k3s_conf is changed or k3s_unit is changed) else 'started' }}"
+    enabled: true
+    daemon_reload: true
+  throttle: 1
+
+- name: Le cluster a généré son jeton
+  ansible.builtin.wait_for:
+    path: "{{ k3s_token_fichier }}"
+    timeout: 300
+  when: inventory_hostname == k3s_premier

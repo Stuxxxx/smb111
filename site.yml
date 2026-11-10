@@ -55,6 +55,13 @@
     - role: keycloak_comptes
       tags: [keycloak, comptes]
 
+- name: Cluster Kubernetes (k3s)
+  hosts: k3s
+  become: true
+  roles:
+    - role: k3s
+      tags: [k3s]
+
 - name: Supervision (Prometheus, Loki, Alertmanager, Grafana)
   hosts: supervision
   become: true

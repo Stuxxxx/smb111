@@ -1,0 +1,28 @@
+---
+# kubectl sur rasb, à la version du cluster (wiki : Kubernetes).
+# Le binaire k3s pour l'architecture de rasb, appelé « kubectl », se comporte
+# exactement comme kubectl : même version et même somme de contrôle que les nœuds.
+
+- name: kubectl {{ k3s_version }}
+  ansible.builtin.get_url:
+    url: "{{ k3s_depot }}/{{ k3s_fichier }}"
+    checksum: "sha256:{{ k3s_depot }}/sha256sum-{{ k3s_arch }}.txt"
+    dest: /usr/local/bin/kubectl
+    owner: root
+    group: root
+    mode: "0755"
+  vars:
+    k3s_depot: "https://github.com/k3s-io/k3s/releases/download/{{ k3s_version | urlencode }}"
+    k3s_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+    k3s_fichier: "{{ 'k3s-arm64' if k3s_arch == 'arm64' else 'k3s' }}"
+
+# Chaque admin utilise le kubeconfig déposé par le rôle k3s, sans rien régler
+- name: KUBECONFIG pour les sessions des admins
+  ansible.builtin.copy:
+    dest: /etc/profile.d/smb111-kubeconfig.sh
+    content: |
+      # Géré par Ansible (rôle poste_admin) : accès au cluster k3s
+      export KUBECONFIG={{ k3s_kubeconfig }}
+    owner: root
+    group: root
+    mode: "0644"

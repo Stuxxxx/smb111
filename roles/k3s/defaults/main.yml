@@ -1,0 +1,25 @@
+---
+# Premier control-plane : crée le cluster (etcd embarqué), les autres le
+# rejoignent. Groupes de l'inventaire : control_plane, workers, k3s.
+k3s_premier: "{{ groups['control_plane'] | first }}"
+k3s_serveur: "{{ inventory_hostname in groups['control_plane'] }}"
+k3s_service: "{{ 'k3s' if k3s_serveur else 'k3s-agent' }}"
+k3s_api_port: 6443
+k3s_api_url: "https://{{ hostvars[k3s_premier].ansible_host }}:{{ k3s_api_port }}"
+
+k3s_binaire: /usr/local/bin/k3s
+k3s_config_dir: /etc/rancher/k3s
+k3s_token_fichier: /var/lib/rancher/k3s/server/token
+
+# Noms et adresses acceptés par le certificat de l'API : chaque control-plane
+k3s_tls_san: "{{ groups['control_plane'] | map('extract', hostvars, 'ansible_host') | list }}"
+
+# Les control-plane ne portent que le cluster (etcd, API) : les applications
+# vont sur les workers. 2 Go par control-plane ne suffiraient pas aux deux.
+k3s_isoler_control_plane: true
+
+# Chiffrement au repos des Secrets Kubernetes dans etcd (RGPD, wiki : Kubernetes)
+k3s_chiffrement_secrets: true
+
+# Options supplémentaires du serveur (ex. OIDC de l'API, étape Keycloak)
+k3s_serveur_options: {}
