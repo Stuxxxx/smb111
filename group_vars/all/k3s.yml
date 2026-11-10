@@ -6,6 +6,23 @@
 # met à jour tout le cluster au passage suivant, un nœud à la fois.
 k3s_version: v1.37.2+k3s1
 
-# kubeconfig d'administration du cluster, déposé sur rasb par le rôle k3s.
-# Groupe admins, 0640 : même niveau de confiance que le vault.
+# kubeconfig d'administration du cluster (certificat admin de k3s), déposé sur
+# rasb par le rôle k3s. Groupe admins, 0640 : même niveau de confiance que le
+# vault. Il sert à Ansible et en secours ; les personnes utilisent le suivant.
 k3s_kubeconfig: /etc/smb111/kubeconfig
+
+# Connexion des personnes au cluster par Keycloak (OIDC) : kubectl ouvre une
+# connexion Keycloak (kubelogin), l'API reconnaît le compte et ses groupes,
+# les droits suivent le groupe (rôle k8s_droits). kubeconfig sans secret.
+k3s_kubeconfig_oidc: /etc/smb111/kubeconfig-oidc
+k3s_oidc_client: kubernetes
+k3s_oidc_issuer: "https://idp.{{ domaine_interne }}/realms/smb111"
+# Préfixe des comptes et groupes Keycloak dans Kubernetes : oidc:sacha, oidc:admins
+k3s_oidc_prefixe: "oidc:"
+k3s_oidc_ca: /usr/local/share/ca-certificates/smb111-racine.crt
+
+# kubelogin (plugin kubectl oidc-login), sur rasb
+kubelogin_version: v1.36.2
+kubelogin_sha256:
+  arm64: ec25ece9a0ccf019dd03041e8e195cd3e3893fdc2a6a2ae35b6464ff954bb40b
+  amd64: 0f9b35e82469dbf1e1ed7cfa8cbaa27ffde733e18930dbaed590518a58eb11cc

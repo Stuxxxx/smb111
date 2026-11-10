@@ -67,6 +67,8 @@
   hosts: admin
   become: true
   roles:
+    - role: k8s_droits
+      tags: [k8s_droits, k3s]
     - role: cert_manager
       tags: [cert_manager, tls]
     - role: supervision_cluster

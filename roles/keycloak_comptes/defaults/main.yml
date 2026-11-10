@@ -41,6 +41,11 @@ kc_clients:
     redirection: /login/generic_oauth
     secret: "{{ supervision_oidc_secret }}"
 
+# Client public de kubectl (kubelogin) : connexion des personnes au cluster
+# Kubernetes. Public, car le secret serait sur chaque poste ; la sécurité
+# vient du code à saisir dans le navigateur (device code) et de PKCE.
+kc_client_kubernetes: "{{ k3s_oidc_client | default('') }}"
+
 # Sécurité du realm
 kc_politique_mdp: "length(12) and notUsername"
 kc_echecs_avant_blocage: 5

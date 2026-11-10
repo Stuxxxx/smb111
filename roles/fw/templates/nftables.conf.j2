@@ -61,9 +61,10 @@ table inet filtre {
     iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT tcp dport { {{ fw_lien_ports_internes | join(', ') }} } accept
     iifname $IF_LIEN oifname $IF_INT ip saddr $ADMIN_LIEN ip daddr $RESEAU_INT icmp type echo-request accept
 
-    # Postes des administrateurs (wg0, relayés par rasb, sans NAT) : interfaces web seulement
+    # Postes des administrateurs (wg0, relayés par rasb, sans NAT) et rasb
+    # lui-même (connexion kubectl par Keycloak) : interfaces web seulement
 {% for s in fw_services_web_admin %}
-    iifname $IF_LIEN oifname $IF_INT ip saddr $POSTES ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
+    iifname $IF_LIEN oifname $IF_INT ip saddr { $POSTES, $ADMIN_LIEN } ip daddr {{ s.ip }} tcp dport {{ s.port }} accept comment "{{ s.nom }}"
 {% endfor %}
 
 {% if fw_supervision_ip and fw_supervision_vers_idp %}

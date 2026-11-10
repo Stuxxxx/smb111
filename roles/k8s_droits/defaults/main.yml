@@ -1,0 +1,9 @@
+---
+# Droits dans le cluster selon le groupe Keycloak (wiki : Gestion des droits,
+# Kubernetes). Les groupes arrivent dans l'API préfixés : oidc:admins.
+#   admins        cluster-admin   tout faire, dans tous les namespaces
+#   utilisateurs  view            lire (pods, déploiements, journaux…), rien
+#                                 modifier, et jamais lire les Secrets
+k8s_droits:
+  - { groupe: admins, role: cluster-admin }
+  - { groupe: utilisateurs, role: view }
