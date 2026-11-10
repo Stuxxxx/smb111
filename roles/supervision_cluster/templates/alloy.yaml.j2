@@ -1,0 +1,103 @@
+# {{ ansible_managed }}
+{% set alloy_config = lookup('ansible.builtin.template', 'config.alloy.j2') %}
+# Alloy du cluster : relève les métriques du cluster et les journaux des pods,
+# et les pousse vers {{ supervision_nom }}. Un seul exemplaire suffit pour
+# 5 nœuds : il passe par l'API, il n'a besoin d'aucun accès aux machines.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy
+  namespace: {{ supervision_cluster_namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: alloy-supervision
+rules:
+  # Découverte des nœuds et des pods
+  - apiGroups: [""]
+    resources: [nodes, pods, services, endpoints, namespaces]
+    verbs: [get, list, watch]
+  # cAdvisor de chaque nœud (consommation des pods), via le proxy de l'API
+  - apiGroups: [""]
+    resources: [nodes/proxy, nodes/metrics]
+    verbs: [get]
+  # Journaux des pods
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: alloy-supervision
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: alloy-supervision
+subjects:
+  - kind: ServiceAccount
+    name: alloy
+    namespace: {{ supervision_cluster_namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy
+  namespace: {{ supervision_cluster_namespace }}
+data:
+  config.alloy: |
+    {{ alloy_config | indent(4) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alloy
+  namespace: {{ supervision_cluster_namespace }}
+  labels: { app: alloy }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: alloy }
+  template:
+    metadata:
+      labels: { app: alloy }
+      annotations:
+        # Redémarre le pod quand la configuration change
+        smb111/config: "{{ alloy_config | hash('sha1') }}"
+    spec:
+      serviceAccountName: alloy
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 473
+        fsGroup: 473
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: alloy
+          image: {{ supervision_cluster_alloy_image }}
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --storage.path=/var/lib/alloy
+            - --server.http.listen-addr=0.0.0.0:12345
+          ports:
+            - { name: http, containerPort: 12345 }
+          readinessProbe:
+            httpGet: { path: /-/ready, port: http }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: config, mountPath: /etc/alloy }
+            - { name: racine, mountPath: /etc/smb111 }
+            - { name: donnees, mountPath: /var/lib/alloy }
+      volumes:
+        - name: config
+          configMap: { name: alloy }
+        - name: racine
+          configMap: { name: smb111-racine }
+        - name: donnees
+          emptyDir: {}

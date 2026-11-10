@@ -69,6 +69,8 @@
   roles:
     - role: cert_manager
       tags: [cert_manager, tls]
+    - role: supervision_cluster
+      tags: [supervision_cluster]
 
 - name: Supervision (Prometheus, Loki, Alertmanager, Grafana)
   hosts: supervision
